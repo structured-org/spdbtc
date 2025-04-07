@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
-import "./interfaces/IspdBTC.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ProductParams } from "./interfaces/IspdBTC.sol";
 
 /**
  * @title spdBTC
@@ -87,18 +90,16 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
     ////////// CONSTRUCTOR ////////
 
     /**
-     * @notice Constructor to initialize the MaxBTC contract.
-     * @param asset_ The address of the ERC20 asset that this contract will manage.
-     * @param name_ The name of the ERC20 token representing MaxBTC.
-     * @param symbol_ The symbol of the ERC20 token representing MaxBTC.
+     * @notice Constructor to initialize the spdBTC contract.
+     * @param asset_ Address of the WBTC ERC20 contract.
+     * @param name_ The name of the ERC20 token representing spdBTC.
+     * @param symbol_ The symbol of the ERC20 token representing spdBTC.
      */
     constructor(
         IERC20 asset_,
         string memory name_,
         string memory symbol_
-    ) ERC4626(asset_) ERC20(name_, symbol_) Ownable(msg.sender) {
-        // TODO: what should be here?
-    }
+    ) ERC4626(asset_) ERC20(name_, symbol_) Ownable(msg.sender) {}
 
     ////////// INITIALIZATION FUNCTIONS ////////
 
@@ -144,11 +145,10 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
     ////////// DEPOSIT FUNCTIONS ////////
 
     /**
-     * @notice Deposits assets into the vault in exchange for MaxBTC tokens.
-     * @dev Validates minimum amount and quote validity before execution.
-     * @param amount The amount of assets to deposit.
-     * @param receiver The address to receive the minted MaxBTC.
-     * @return The amount of MaxBTC minted.
+     * @notice Deposits WBTC into the vault in exchange for spdBTC tokens.
+     * @param amount The amount of WBTC to deposit.
+     * @param receiver The address to receive the minted spdBTC.
+     * @return The amount of spdBTC minted.
      */
     function deposit(
         uint amount,
@@ -209,27 +209,27 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
 
     /**
      * @notice Validates deposit parameters and contract state for deposits
-     * @dev Checks minimum deposit, quote validity, and blacklist status
-     * @param assets The amount of assets to deposit
-     * @param receiver The address to receive the minted MaxBTC
+     * @dev Checks minimum deposit and blacklist status
+     * @param amount The amount of assets to deposit
+     * @param receiver The address to receive the minted spdBTC
      */
-    function _isValidDeposit(uint assets, address receiver) internal view {
-        require(assets >= minDeposit, "Deposit amount below minimum");
+    function _isValidDeposit(uint amount, address receiver) internal view {
+        require(amount >= minDeposit, "Deposit amount below minimum");
         require(!blacklisted[_msgSender()], "Sender is blacklisted");
         require(!blacklisted[receiver], "Receiver is blacklisted");
 
         uint maxAssets = maxDeposit(receiver);
-        if (assets > maxAssets) {
-            revert ERC4626ExceededMaxDeposit(receiver, assets, maxAssets);
+        if (amount > maxAssets) {
+            revert ERC4626ExceededMaxDeposit(receiver, amount, maxAssets);
         }
     }
 
     /**
      * @notice Executes the common deposit/mint workflow.
-     * @dev Verifies allowance, transfers assets to the custodian, mints MaxBTC tokens, updates total deposits, and emits a Deposit event.
+     * @dev Verifies allowance, transfers assets to the custodian, mints spdBTC tokens, updates total deposits, and emits a Deposit event.
      * @param caller The address initiating the deposit.
-     * @param receiver The address to receive the minted MaxBTC tokens.
-     * @param amount The amount of assets to deposit.
+     * @param receiver The address to receive the minted spdBTC tokens.
+     * @param amount The amount of WBTC to deposit.
      */
     function _deposit(
         address caller,
