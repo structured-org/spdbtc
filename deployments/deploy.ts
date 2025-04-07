@@ -1,9 +1,11 @@
 import { ethers } from "hardhat";
 
 async function main() {
-  const spdBTC = await ethers.getContractFactory("spdBTC");
-  const spd_Btc = await spdBTC.deploy(
-    "0x0000000000000000000000000000000000000000",
+  const spdBtc = await ethers.getContractFactory("spdBTC");
+  const tokenMinter = await ethers.getContractFactory("TokenMinter");
+  const token_Minter = await tokenMinter.deploy();
+  const spd_Btc = await spdBtc.deploy(
+    await token_Minter.getAddress(),
     "spdBTC",
     "spdBTC"
   );
