@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "spdBTC custodial wrapper",
   "license": "MIT",
+  "scripts": {
+    "deploy": "npx hardhat run deployments/deploy.ts --network sepolia"
+  },
   "author": "Murad Karammaev <muradkarammaev@gmail.com>",
   "main": "index.js",
   "devDependencies": {
@@ -10,6 +13,7 @@
     "hardhat": "^2.22.19"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^5.2.0"
+    "@openzeppelin/contracts": "^5.2.0",
+    "dotenv": "^16.4.7"
   }
 }
