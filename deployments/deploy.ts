@@ -9,7 +9,11 @@ async function main() {
     "spdBTC",
     "spdBTC"
   );
-  console.log("Contract's address:", await spd_Btc.getAddress());
+  console.log(
+    "Contract's address (token_minter):",
+    await token_Minter.getAddress()
+  );
+  console.log("Contract's address (spd_btc):", await spd_Btc.getAddress());
 }
 
 main()
