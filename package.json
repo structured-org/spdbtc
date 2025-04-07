@@ -6,6 +6,7 @@
   "scripts": {
     "deploy": "npx hardhat run deployments/deploy.ts --network sepolia",
     "test": "npx hardhat test --network hardhat",
+    "solhint": "npx solhint contracts/**/*.sol",
     "lint": "eslint \"**/*.{ts,tsx}\" -f compact",
     "lint:fix": "eslint \"**/*.{ts,tsx}\" -f compact --fix"
   },
