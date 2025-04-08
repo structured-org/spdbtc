@@ -1,5 +1,8 @@
 import { ethers } from 'hardhat';
 
+require('dotenv').config({ path: __dirname + '.env' });
+const { CUSTODIAN } = process.env;
+
 async function main() {
   const spdBtc = await ethers.getContractFactory('spdBTC');
   const tokenMinter = await ethers.getContractFactory('TokenMinter');
@@ -19,7 +22,7 @@ async function main() {
   await spd_Btc.initializeProduct({
     minDeposit: 0,
     maxDeposit: BigInt(2 ** 52),
-    custodian: '0x38F11A09610A8af2ef4997fe29c59aD6365f8D0c',
+    custodian: CUSTODIAN,
   });
 }
 
