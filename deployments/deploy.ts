@@ -9,6 +9,11 @@ async function main() {
     'spdBTC',
     'spdBTC',
   );
+  await spd_Btc.getFunction('initializeProduct')({
+    minDeposit: 0,
+    maxDeposit: Math.pow(2, 52),
+    custodian: '0x0000000000000000000000000000000000000000',
+  });
   console.log(
     "Contract's address (token_minter):",
     await token_Minter.getAddress(),
