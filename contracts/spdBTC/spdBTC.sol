@@ -3,24 +3,30 @@ pragma solidity 0.8.28;
 
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { ProductParams } from "./interfaces/IspdBTC.sol";
 
 /**
  * @title spdBTC
- * @dev A vault contract, accepts WBTC as a deposit, mints back spdBTC at 1-1 ratio.
+ * @dev A contract that accepts WBTC as a deposit and mints spdBTC at a 1:1 ratio.
  */
-contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
+contract spdBTC is ERC20, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
+
+    /// @notice The underlying asset token contract (WBTC)
+    IERC20 public immutable asset;
+
+    /// @notice The number of decimals for this spdBTC token, mirroring the asset.
+    uint8 private _decimals;
 
     /// @notice Minimum deposit amount
     uint public minDeposit;
 
-    /// @notice Maximum deposit amount
-    uint public _maxDeposit;
+    /// @notice Maximum deposit amount per address (can be set during initialization)
+    uint public maxDeposit;
 
     /// @notice Contract initialization timestamp
     uint public initializationTime;
@@ -28,14 +34,14 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
     /// @notice Custodian address
     address private _custodian;
 
-    /// @notice Whether the product is initialized
-    bool public initialized;
-
     /// @notice Whether the product is paused
     bool public paused;
 
     // Blacklist functionality as Tether
     mapping(address => bool) public blacklisted;
+
+    /// @notice Custom error when deposit exceeds the maximum limit.
+    error ExceededMaxDeposit(address receiver, uint amount, uint maxAmount);
 
     /**
      * @notice Emitted when the product is initialized.
@@ -61,6 +67,20 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
      */
     event Blacklisted(address indexed user, bool blacklisted);
 
+    /**
+     * @notice Emitted on a successful deposit.
+     * @param caller The address initiating the deposit.
+     * @param receiver The address receiving the spdBTC tokens.
+     * @param assetAmount The amount of the underlying asset deposited.
+     * @param sharesMinted The amount of spdBTC tokens minted.
+     */
+    event Deposit(
+        address indexed caller,
+        address indexed receiver,
+        uint assetAmount,
+        uint sharesMinted
+    );
+
     ////////// MODIFIERS ////////
 
     /**
@@ -83,7 +103,7 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
      * @dev Modifier to ensure the contract is initialized.
      */
     modifier whenInitialized() {
-        require(initialized, "Contract not initialized");
+        require(initializationTime > 0, "Contract not initialized");
         _;
     }
 
@@ -99,7 +119,20 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
         IERC20 asset_,
         string memory name_,
         string memory symbol_
-    ) ERC4626(asset_) ERC20(name_, symbol_) Ownable(msg.sender) {}
+    )
+        ERC20(name_, symbol_)
+        Ownable(msg.sender)
+    {
+        require(address(asset_) != address(0), "Asset address cannot be zero");
+        asset = asset_;
+
+        try IERC20Metadata(address(asset_)).decimals() returns (uint8 assetDecimals) {
+            _decimals = assetDecimals;
+        } catch {
+            // Revert if the asset contract doesn't expose decimals().
+            revert("Asset contract does not support decimals()");
+        }
+    }
 
     ////////// INITIALIZATION FUNCTIONS ////////
 
@@ -109,14 +142,13 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
      * @param params Struct containing initialization parameters.
      */
     function initializeProduct(ProductParams memory params) external onlyOwner {
-        require(!initialized, "Product already initialized");
+        require(initializationTime == 0, "Product already initialized");
         require(params.custodian != address(0), "Custodian address cannot be zero");
 
         minDeposit = params.minDeposit;
-        _maxDeposit = params.maxDeposit;
+        maxDeposit = params.maxDeposit;
         _custodian = params.custodian;
         initializationTime = block.timestamp;
-        initialized = true;
         paused = false;
 
         emit ProductInitialized();
@@ -133,13 +165,12 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
     }
 
     /**
-     * @notice Returns the maximum deposit amount.
-     * @return The maximum amount of assets that can be deposited.
+     * @notice Returns the number of decimals used by this token.
+     * @dev Overrides ERC20's default decimals() to match the underlying asset.
+     * @return The number of decimals.
      */
-    function maxDeposit(
-        address
-    ) public view virtual override whenInitialized returns (uint256) {
-        return _maxDeposit;
+    function decimals() public view virtual override returns (uint8) {
+        return _decimals;
     }
 
     ////////// DEPOSIT FUNCTIONS ////////
@@ -155,15 +186,14 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
         address receiver
     )
         public
-        virtual
-        override
         nonReentrant
         whenNotPaused
         notBlacklisted
+        whenInitialized
         returns (uint)
     {
         _isValidDeposit(amount, receiver);
-        _deposit(_msgSender(), receiver, amount, amount);
+        _deposit(_msgSender(), receiver, amount);
         return amount;
     }
 
@@ -209,7 +239,7 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
 
     /**
      * @notice Validates deposit parameters and contract state for deposits
-     * @dev Checks minimum deposit and blacklist status
+     * @dev Checks minimum deposit, maximum deposit, and blacklist status
      * @param amount The amount of assets to deposit
      * @param receiver The address to receive the minted spdBTC
      */
@@ -218,9 +248,9 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
         require(!blacklisted[_msgSender()], "Sender is blacklisted");
         require(!blacklisted[receiver], "Receiver is blacklisted");
 
-        uint maxAssets = maxDeposit(receiver);
+        uint maxAssets = maxDeposit;
         if (amount > maxAssets) {
-            revert ERC4626ExceededMaxDeposit(receiver, amount, maxAssets);
+            revert ExceededMaxDeposit(receiver, amount, maxAssets);
         }
     }
 
@@ -236,10 +266,11 @@ contract spdBTC is ERC4626, ReentrancyGuard, Ownable {
         address receiver,
         uint amount
     ) internal {
-        uint allowance = IERC20(asset()).allowance(caller, address(this));
+        // Use the stored asset state variable
+        uint allowance = asset.allowance(caller, address(this));
         require(allowance >= amount, "Insufficient allowance");
         // Transfer tokens from sender to custodian
-        IERC20(asset()).safeTransferFrom(caller, _custodian, amount);
+        asset.safeTransferFrom(caller, _custodian, amount);
 
         // Mint share tokens to receiver
         _mint(receiver, amount);
