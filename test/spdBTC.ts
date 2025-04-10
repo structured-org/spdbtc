@@ -1,5 +1,6 @@
 import { ethers } from 'hardhat';
 import { expect } from 'chai';
+import { FunctionFragment } from 'ethers';
 
 describe('TokenMinter', function () {
   const contracts: {
@@ -16,16 +17,44 @@ describe('TokenMinter', function () {
     contracts.tokenMinter = await TokenMinter.deploy();
 
     const spdBTC = await ethers.getContractFactory('spdBTC');
-    contracts.spdBtc = await spdBTC.deploy(
-      await contracts.tokenMinter.getAddress(),
-      'spdBTC',
-      'spdBTC',
+    const ossifiableProxy = await ethers.getContractFactory('OssifiableProxy');
+    const spdBtcImplementation = await spdBTC.deploy();
+    const initializeProductFunction = (
+      spdBTC.interface.fragments.filter(
+        (f) => f.type == 'function',
+      ) as FunctionFragment[]
+    ).find((f) => f.name == 'initializeProduct') as FunctionFragment;
+    const initializeProductData = spdBTC.interface.encodeFunctionData(
+        initializeProductFunction, [
+          {
+            asset: await contracts.tokenMinter.getAddress(),
+            name: 'spdBTC',
+            symbol: 'spdBTC',
+            minDeposit: 0,
+            maxDeposit: Math.pow(2, 52),
+            custodian: await spdBtcImplementation.getAddress(),
+          }
+        ]
     );
-    await contracts.spdBtc.initializeProduct({
-      minDeposit: 0,
-      maxDeposit: Math.pow(2, 52),
-      custodian: await contracts.spdBtc.getAddress(),
-    });
+    const ossifiableProxyImplementation = await ossifiableProxy.deploy(
+      await spdBtcImplementation.getAddress(),
+      owner.address,
+      initializeProductData,
+    );
+    contracts.spdBtc = spdBTC.attach(await ossifiableProxyImplementation.getAddress());
+  });
+
+  it('Cannot initialize twice', async function () {
+    await expect(
+      contracts.spdBtc.initializeProduct({
+        asset: await contracts.tokenMinter.getAddress(),
+        name: 'spdBTC',
+        symbol: 'spdBTC',
+        minDeposit: 1000,
+        maxDeposit: Math.pow(2, 52),
+        custodian: await contracts.spdBtc.getAddress(),
+      }),
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'InvalidInitialization');
   });
 
   it('Mint & Execute', async function () {
