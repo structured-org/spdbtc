@@ -16,7 +16,12 @@ import { ProductParams } from "./interfaces/IspdBTC.sol";
  * @title spdBTC
  * @dev A contract that accepts WBTC as a deposit and mints spdBTC at a 1:1 ratio.
  */
-contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradeable, PausableUpgradeable {
+contract spdBTC is
+    ReentrancyGuardUpgradeable,
+    ERC20Upgradeable,
+    OwnableUpgradeable,
+    PausableUpgradeable
+{
     using SafeERC20 for IERC20;
 
     /**
@@ -131,7 +136,22 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
 
     ////////// READ FUNCTIONS ////////
 
-    // TODO: asset, pause, blacklist getters
+    /**
+     * @notice Returns the address of the underlying asset token contract (WBTC).
+     * @return Underlying asset token contract (WBTC).
+     */
+    function asset() external view returns (address) {
+        return StorageSlot.getAddressSlot(_ASSET_SLOT).value;
+    }
+
+    /**
+     * @notice Returns blacklist status for specified user.
+     * @param who User address to query blacklist status for.
+     * @return Is user blacklisted.
+     */
+    function isBlacklisted(address who) external view returns (bool) {
+        return _getBlacklistStorage().value[who];
+    }
 
     /**
      * @notice Returns minimum deposit amount.
@@ -246,15 +266,15 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
      * @notice Blacklists or unblacklists an address.
      * @dev Can only be called by the owner.
      * @param user The address to blacklist or unblacklist.
-     * @param isBlacklisted Whether to blacklist or unblacklist the address.
+     * @param _isBlacklisted Whether to blacklist or unblacklist the address.
      */
     function setBlacklisted(
         address user,
-        bool isBlacklisted
+        bool _isBlacklisted
     ) external onlyOwner {
         require(user != address(0), "Zero address not allowed");
-        _getBlacklistStorage().value[user] = isBlacklisted;
-        emit Blacklisted(user, isBlacklisted);
+        _getBlacklistStorage().value[user] = _isBlacklisted;
+        emit Blacklisted(user, _isBlacklisted);
     }
 
     ////////// INTERNAL FUNCTIONS ////////
@@ -287,12 +307,12 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
         address receiver,
         uint256 amount
     ) internal {
-        IERC20 asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
+        IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
 
-        uint256 allowance = asset.allowance(caller, address(this));
+        uint256 allowance = _asset.allowance(caller, address(this));
         require(allowance >= amount, "Insufficient allowance");
         // Transfer tokens from sender to custodian
-        asset.safeTransferFrom(caller, StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
+        _asset.safeTransferFrom(caller, StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
 
         // Mint share tokens to receiver
         _mint(receiver, amount);
