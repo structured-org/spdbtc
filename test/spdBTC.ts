@@ -186,5 +186,50 @@ describe('TokenMinter', function () {
     ).to.be.revertedWith('Address is blacklisted');
   });
 
-  // TODO: pause tests
+  it('Cannot transfer when paused', async function() {
+    const mintAmount = ethers.parseUnits('1000', 18);
+    await contracts.tokenMinter.mint(owner.address, mintAmount);
+    await contracts.tokenMinter.allow(
+      owner.address,
+      await contracts.spdBtc.getAddress(),
+    );
+    await contracts.spdBtc.deposit(100, owner.address);
+    await contracts.spdBtc.setContractPaused(true);
+
+    await expect(
+      contracts.spdBtc.transfer(user1.address, 50),
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
+  });
+
+  it('Cannot transferFrom when paused', async function() {
+    const mintAmount = ethers.parseUnits('1000', 18);
+    await contracts.tokenMinter.mint(owner.address, mintAmount);
+    await contracts.tokenMinter.allow(
+      owner.address,
+      await contracts.spdBtc.getAddress(),
+    );
+    await contracts.spdBtc.deposit(100, user1.address);
+    await contracts.spdBtc.connect(user1).approve(
+      owner.address, 50,
+    );
+    await contracts.spdBtc.setContractPaused(true);
+
+    await expect(
+      contracts.spdBtc.transferFrom(user1.address, user2.address, 50),
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
+  });
+
+  it('Cannot deposit when paused', async function() {
+    const mintAmount = ethers.parseUnits('1000', 18);
+    await contracts.tokenMinter.mint(owner.address, mintAmount);
+    await contracts.tokenMinter.allow(
+      owner.address,
+      await contracts.spdBtc.getAddress(),
+    );
+    await contracts.spdBtc.setContractPaused(true);
+
+    await expect(
+      contracts.spdBtc.deposit(100, owner.address),
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
+  });
 });

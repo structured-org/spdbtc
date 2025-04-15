@@ -60,8 +60,6 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
         }
     }
 
-    // TODO: it is probably possible to send ERC20 tokens even when contract is paused
-
     /// @notice Custom error when deposit exceeds the maximum limit.
     error ExceededMaxDeposit(address receiver, uint256 amount, uint256 maxAmount);
 
@@ -193,12 +191,26 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
 
     ////////// TOKEN FUNCTIONS ////////
 
-    function transfer(address to, uint256 value) public override notBlacklisted returns (bool) {
+    function transfer(address to, uint256 value)
+        public
+        override
+        nonReentrant
+        whenNotPaused
+        notBlacklisted
+        returns (bool)
+    {
         require(!_getBlacklistStorage().value[to], "Receiver is blacklisted");
         return super.transfer(to, value);
     }
 
-    function transferFrom(address from, address to, uint256 value) public override notBlacklisted returns (bool) {
+    function transferFrom(address from, address to, uint256 value)
+        public
+        override
+        nonReentrant
+        whenNotPaused
+        notBlacklisted
+        returns (bool)
+    {
         require(!_getBlacklistStorage().value[from], "Sender is blacklisted");
         require(!_getBlacklistStorage().value[to], "Receiver is blacklisted");
         return super.transferFrom(from, to, value);
