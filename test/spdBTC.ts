@@ -29,23 +29,26 @@ describe('TokenMinter', function () {
       ) as FunctionFragment[]
     ).find((f) => f.name == 'initializeProduct') as FunctionFragment;
     const initializeProductData = spdBTC.interface.encodeFunctionData(
-        initializeProductFunction, [
-          {
-            asset: await contracts.tokenMinter.getAddress(),
-            name: 'spdBTC',
-            symbol: 'spdBTC',
-            minDeposit: 0,
-            maxDeposit: Math.pow(2, 52),
-            custodian: await spdBtcImplementation.getAddress(),
-          }
-        ]
+      initializeProductFunction,
+      [
+        {
+          asset: await contracts.tokenMinter.getAddress(),
+          name: 'spdBTC',
+          symbol: 'spdBTC',
+          minDeposit: 0,
+          maxDeposit: Math.pow(2, 52),
+          custodian: await spdBtcImplementation.getAddress(),
+        },
+      ],
     );
     const ossifiableProxyImplementation = await ossifiableProxy.deploy(
       await spdBtcImplementation.getAddress(),
       owner.address,
       initializeProductData,
     );
-    contracts.spdBtc = spdBTC.attach(await ossifiableProxyImplementation.getAddress());
+    contracts.spdBtc = spdBTC.attach(
+      await ossifiableProxyImplementation.getAddress(),
+    );
   });
 
   it('Cannot initialize twice', async function () {
@@ -116,7 +119,7 @@ describe('TokenMinter', function () {
     await contracts.spdBtc.deposit(100, user1.address);
 
     await expect(
-      contracts.spdBtc.connect(user1).transfer(user2.address, 50)
+      contracts.spdBtc.connect(user1).transfer(user2.address, 50),
     ).to.be.revertedWith('Receiver is blacklisted');
   });
 
@@ -131,7 +134,7 @@ describe('TokenMinter', function () {
     await contracts.spdBtc.setBlacklisted(user1.address, true);
 
     await expect(
-      contracts.spdBtc.connect(user1).transfer(user2.address, 50)
+      contracts.spdBtc.connect(user1).transfer(user2.address, 50),
     ).to.be.revertedWith('Address is blacklisted');
   });
 
@@ -175,18 +178,17 @@ describe('TokenMinter', function () {
       await contracts.spdBtc.getAddress(),
     );
     await contracts.spdBtc.deposit(100, owner.address);
-    await contracts.spdBtc.approve(
-      user1.address,
-      100,
-    );
+    await contracts.spdBtc.approve(user1.address, 100);
     await contracts.spdBtc.setBlacklisted(user1.address, true);
 
     await expect(
-      contracts.spdBtc.connect(user1).transferFrom(owner.address, user2.address, 50),
+      contracts.spdBtc
+        .connect(user1)
+        .transferFrom(owner.address, user2.address, 50),
     ).to.be.revertedWith('Address is blacklisted');
   });
 
-  it('Cannot transfer when paused', async function() {
+  it('Cannot transfer when paused', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
@@ -201,7 +203,7 @@ describe('TokenMinter', function () {
     ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
   });
 
-  it('Cannot transferFrom when paused', async function() {
+  it('Cannot transferFrom when paused', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
@@ -209,9 +211,7 @@ describe('TokenMinter', function () {
       await contracts.spdBtc.getAddress(),
     );
     await contracts.spdBtc.deposit(100, user1.address);
-    await contracts.spdBtc.connect(user1).approve(
-      owner.address, 50,
-    );
+    await contracts.spdBtc.connect(user1).approve(owner.address, 50);
     await contracts.spdBtc.setContractPaused(true);
 
     await expect(
@@ -219,7 +219,7 @@ describe('TokenMinter', function () {
     ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
   });
 
-  it('Cannot deposit when paused', async function() {
+  it('Cannot deposit when paused', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
