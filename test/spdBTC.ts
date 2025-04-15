@@ -20,7 +20,7 @@ describe('TokenMinter', function () {
     const TokenMinter = await ethers.getContractFactory('TokenMinter');
     contracts.tokenMinter = await TokenMinter.deploy();
 
-    const spdBTC = await ethers.getContractFactory('spdBTC');
+    const spdBTC = await ethers.getContractFactory('SpdBTC');
     const ossifiableProxy = await ethers.getContractFactory('OssifiableProxy');
     const spdBtcImplementation = await spdBTC.deploy();
     const initializeProductFunction = (

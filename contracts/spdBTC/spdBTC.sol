@@ -16,7 +16,7 @@ import { ProductParams } from "./interfaces/IspdBTC.sol";
  * @title spdBTC
  * @dev A contract that accepts WBTC as a deposit and mints spdBTC at a 1:1 ratio.
  */
-contract spdBTC is
+contract SpdBTC is
     ReentrancyGuardUpgradeable,
     ERC20Upgradeable,
     OwnableUpgradeable,
@@ -112,7 +112,7 @@ contract spdBTC is
      * @dev Can only be called by the owner and only once.
      * @param params Struct containing initialization parameters.
      */
-    function initializeProduct(ProductParams memory params) initializer external {
+    function initializeProduct(ProductParams memory params) external initializer {
         require(params.asset != address(0), "Asset address cannot be zero");
         require(params.custodian != address(0), "Custodian address cannot be zero");
 
@@ -125,7 +125,7 @@ contract spdBTC is
             StorageSlot.getUint256Slot(_DECIMALS_SLOT).value = uint256(assetDecimals);
         } catch {
             // Revert if the asset contract doesn't expose decimals().
-            revert("Asset contract does not support decimals()");
+            revert("Asset contract has no decimals()");
         }
 
         StorageSlot.getAddressSlot(_ASSET_SLOT).value = params.asset;
