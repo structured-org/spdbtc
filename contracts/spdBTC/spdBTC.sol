@@ -60,7 +60,6 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
         }
     }
 
-    // TODO: it is probably possible to send ERC20 tokens to blacklisted users
     // TODO: it is probably possible to send ERC20 tokens even when contract is paused
 
     /// @notice Custom error when deposit exceeds the maximum limit.
@@ -115,7 +114,7 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
         require(params.custodian != address(0), "Custodian address cannot be zero");
 
         __ReentrancyGuard_init();
-        __Ownable_init(msg.sender); // TODO: is it actually safe to pass msg.sender here?
+        __Ownable_init(msg.sender);
         __ERC20_init(params.name, params.symbol);
         __Pausable_init();
 
@@ -192,6 +191,19 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
         return amount;
     }
 
+    ////////// TOKEN FUNCTIONS ////////
+
+    function transfer(address to, uint256 value) public override notBlacklisted returns (bool) {
+        require(!_getBlacklistStorage().value[to], "Receiver is blacklisted");
+        return super.transfer(to, value);
+    }
+
+    function transferFrom(address from, address to, uint256 value) public override notBlacklisted returns (bool) {
+        require(!_getBlacklistStorage().value[from], "Sender is blacklisted");
+        require(!_getBlacklistStorage().value[to], "Receiver is blacklisted");
+        return super.transferFrom(from, to, value);
+    }
+
     ////////// ADMIN FUNCTIONS ////////
 
     /**
@@ -243,7 +255,6 @@ contract spdBTC is ReentrancyGuardUpgradeable, ERC20Upgradeable, OwnableUpgradea
      */
     function _isValidDeposit(uint256 amount, address receiver) internal view {
         require(amount >= StorageSlot.getUint256Slot(_MIN_DEPOSIT_SLOT).value, "Deposit amount below minimum");
-        require(!_getBlacklistStorage().value[_msgSender()], "Sender is blacklisted");
         require(!_getBlacklistStorage().value[receiver], "Receiver is blacklisted");
 
         uint256 maxAssets = StorageSlot.getUint256Slot(_MAX_DEPOSIT_SLOT).value;
