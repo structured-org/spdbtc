@@ -68,8 +68,6 @@ contract SpdBTC is
     error SenderBlacklisted(address sender);
     /// @notice Custom error when attempting to blacklist the zero address.
     error ZeroAddressNotAllowed();
-    /// @notice Custom error when spender does not have enough allowance.
-    error InsufficientAllowance(address owner, address spender, uint256 allowance, uint256 amountNeeded);
     /// @notice Custom error when attempting to seize funds from a non-blacklisted user.
     error FundsSeizedFromNonBlacklistedUser(address user);
     /// @notice Custom error when deposit exceeds the maximum limit.
@@ -353,7 +351,7 @@ contract SpdBTC is
 
     /**
      * @notice Executes the common deposit/mint workflow.
-     * @dev Verifies allowance, transfers assets to the custodian, mints spdBTC tokens, updates total deposits, and emits a Deposit event.
+     * @dev Transfers assets to the custodian, mints spdBTC tokens and emits a Deposit event.
      * @param caller The address initiating the deposit.
      * @param receiver The address to receive the minted spdBTC tokens.
      * @param amount The amount of WBTC to deposit.
@@ -364,13 +362,7 @@ contract SpdBTC is
         uint256 amount
     ) internal {
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
-
-        uint256 allowance = _asset.allowance(caller, address(this));
-        if (allowance < amount) {
-            revert InsufficientAllowance(caller, address(this), allowance, amount);
-        }
         _asset.safeTransferFrom(caller, StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
-
         _mint(receiver, amount);
         emit Deposit(caller, receiver, amount, amount);
     }
