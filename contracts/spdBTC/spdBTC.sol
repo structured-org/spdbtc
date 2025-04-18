@@ -121,8 +121,8 @@ contract SpdBTC is
      * @dev Modifier to ensure the sender is not blacklisted.
      */
     modifier notBlacklisted() {
-        if (_getBlacklistStorage().value[msg.sender]) {
-            revert SenderBlacklisted(msg.sender);
+        if (_getBlacklistStorage().value[_msgSender()]) {
+            revert SenderBlacklisted(_msgSender());
         }
         _;
     }
@@ -143,7 +143,7 @@ contract SpdBTC is
         }
 
         __ReentrancyGuard_init();
-        __Ownable_init(msg.sender);
+        __Ownable_init(_msgSender());
         __ERC20_init(params.name, params.symbol);
         __Pausable_init();
 
