@@ -10,7 +10,7 @@ import { StorageSlot } from "@openzeppelin/contracts/utils/StorageSlot.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { ProductParams } from "./interfaces/IspdBTC.sol";
+import { ProductParams, BlacklistStorage } from "./interfaces/IspdBTC.sol";
 
 /**
  * @title spdBTC
@@ -56,15 +56,29 @@ contract SpdBTC is
      * @dev bytes32(uint256(keccak256('spdbtc.blacklist')) - 1)
      */
     bytes32 internal constant _BLACKLIST_SLOT = 0x1b78fe6e90a13fd3613f6765435a41cc68067e7d36c75ef0614e997d5fdd5a52;
-    struct BlacklistStorage {
-        mapping(address => bool) value;    
-    }
+
+    /**
+     * @dev Gets a pointer to the BlacklistStorage struct in storage.
+     * @return $ A storage pointer to the BlacklistStorage struct.
+     */
     function _getBlacklistStorage() internal pure returns (BlacklistStorage storage $) {
         assembly {
             $.slot := _BLACKLIST_SLOT
         }
     }
 
+    /// @notice Custom error when deposit is below the minimum limit.
+    error BelowMinDeposit(uint256 amount, uint256 minAmount);
+    /// @notice Custom error when the receiver of a deposit or transfer is blacklisted.
+    error ReceiverBlacklisted(address receiver);
+    /// @notice Custom error when the sender of a transaction (deposit, transfer) is blacklisted.
+    error SenderBlacklisted(address sender);
+    /// @notice Custom error when attempting to blacklist the zero address.
+    error ZeroAddressNotAllowed();
+    /// @notice Custom error when spender does not have enough allowance.
+    error InsufficientAllowance(address owner, address spender, uint256 allowance, uint256 amountNeeded);
+    /// @notice Custom error when attempting to seize funds from a non-blacklisted user.
+    error FundsSeizedFromNonBlacklistedUser(address user);
     /// @notice Custom error when deposit exceeds the maximum limit.
     error ExceededMaxDeposit(address receiver, uint256 amount, uint256 maxAmount);
 
@@ -80,6 +94,13 @@ contract SpdBTC is
      * @param blacklisted Whether the address is blacklisted.
      */
     event Blacklisted(address indexed user, bool blacklisted);
+
+    /**
+     * @notice Emitted when funds are seized from a blacklisted address.
+     * @param user The address whose funds were seized.
+     * @param amount The amount of tokens seized.
+     */
+    event FundsSeized(address indexed user, uint256 amount);
 
     /**
      * @notice Emitted on a successful deposit.
@@ -101,7 +122,9 @@ contract SpdBTC is
      * @dev Modifier to ensure the sender is not blacklisted.
      */
     modifier notBlacklisted() {
-        require(!_getBlacklistStorage().value[msg.sender], "Address is blacklisted");
+        if (_getBlacklistStorage().value[msg.sender]) {
+            revert SenderBlacklisted(msg.sender);
+        }
         _;
     }
 
@@ -113,8 +136,12 @@ contract SpdBTC is
      * @param params Struct containing initialization parameters.
      */
     function initializeProduct(ProductParams memory params) external initializer {
-        require(params.asset != address(0), "Asset address cannot be zero");
-        require(params.custodian != address(0), "Custodian address cannot be zero");
+        if (params.asset == address(0)) {
+            revert ZeroAddressNotAllowed();
+        }
+        if (params.custodian == address(0)) {
+            revert ZeroAddressNotAllowed();
+        }
 
         __ReentrancyGuard_init();
         __Ownable_init(msg.sender);
@@ -173,7 +200,7 @@ contract SpdBTC is
      * @notice Returns the custodian address.
      * @return Custodian address.
      */
-    function custodianAccount() external view returns (address) {
+    function custodianAccount() public view returns (address) {
         return StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value;
     }
 
@@ -219,7 +246,9 @@ contract SpdBTC is
         notBlacklisted
         returns (bool)
     {
-        require(!_getBlacklistStorage().value[to], "Receiver is blacklisted");
+        if (_getBlacklistStorage().value[to]) {
+            revert ReceiverBlacklisted(to);
+        }
         return super.transfer(to, value);
     }
 
@@ -231,8 +260,12 @@ contract SpdBTC is
         notBlacklisted
         returns (bool)
     {
-        require(!_getBlacklistStorage().value[from], "Sender is blacklisted");
-        require(!_getBlacklistStorage().value[to], "Receiver is blacklisted");
+        if (_getBlacklistStorage().value[from]) {
+            revert SenderBlacklisted(from);
+        }
+        if (_getBlacklistStorage().value[to]) {
+            revert ReceiverBlacklisted(to);
+        }
         return super.transferFrom(from, to, value);
     }
 
@@ -257,7 +290,9 @@ contract SpdBTC is
      * @param newCustodian The address of the new custodian.
      */
     function setCustodian(address newCustodian) external onlyOwner {
-        require(newCustodian != address(0), "Zero address not allowed");
+        if (newCustodian == address(0)) {
+            revert ZeroAddressNotAllowed();
+        }
         StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value = newCustodian;
         emit CustodianSet(newCustodian);
     }
@@ -272,9 +307,29 @@ contract SpdBTC is
         address user,
         bool _isBlacklisted
     ) external onlyOwner {
-        require(user != address(0), "Zero address not allowed");
+        if (user == address(0)) {
+            revert ZeroAddressNotAllowed();
+        }
         _getBlacklistStorage().value[user] = _isBlacklisted;
         emit Blacklisted(user, _isBlacklisted);
+    }
+
+    /**
+     * @notice Seizes tokens from a blacklisted address and sends them to the custodian.
+     * @dev Can only be called by the owner. The user must be blacklisted.
+     * @param user The blacklisted address whose funds will be seized.
+     */
+    function seizeFunds(address user) external onlyOwner nonReentrant {
+        if (!_getBlacklistStorage().value[user]) {
+            revert FundsSeizedFromNonBlacklistedUser(user);
+        }
+
+        uint256 seizedAmount = balanceOf(user);
+        if (seizedAmount > 0) {
+            address custodian = custodianAccount();
+            _transfer(user, custodian, seizedAmount);
+            emit FundsSeized(user, seizedAmount);
+        }
     }
 
     ////////// INTERNAL FUNCTIONS ////////
@@ -286,8 +341,14 @@ contract SpdBTC is
      * @param receiver The address to receive the minted spdBTC
      */
     function _isValidDeposit(uint256 amount, address receiver) internal view {
-        require(amount >= StorageSlot.getUint256Slot(_MIN_DEPOSIT_SLOT).value, "Deposit amount below minimum");
-        require(!_getBlacklistStorage().value[receiver], "Receiver is blacklisted");
+        uint256 min = StorageSlot.getUint256Slot(_MIN_DEPOSIT_SLOT).value;
+        if (amount < min) {
+            revert BelowMinDeposit(amount, min);
+        }
+
+        if (_getBlacklistStorage().value[receiver]) {
+            revert ReceiverBlacklisted(receiver);
+        }
 
         uint256 maxAssets = StorageSlot.getUint256Slot(_MAX_DEPOSIT_SLOT).value;
         if (amount > maxAssets) {
@@ -310,11 +371,11 @@ contract SpdBTC is
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
 
         uint256 allowance = _asset.allowance(caller, address(this));
-        require(allowance >= amount, "Insufficient allowance");
-        // Transfer tokens from sender to custodian
+        if (allowance < amount) {
+            revert InsufficientAllowance(caller, address(this), allowance, amount);
+        }
         _asset.safeTransferFrom(caller, StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
 
-        // Mint share tokens to receiver
         _mint(receiver, amount);
         emit Deposit(caller, receiver, amount, amount);
     }

@@ -91,7 +91,7 @@ describe('TokenMinter', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).deposit(100, user2.address),
-    ).to.be.revertedWith('Address is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
   });
 
   it('Cannot deposit to blacklisted address', async function () {
@@ -105,7 +105,7 @@ describe('TokenMinter', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).deposit(100, user2.address),
-    ).to.be.revertedWith('Receiver is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
   });
 
   it('Cannot transfer tokens to blacklisted address', async function () {
@@ -120,7 +120,7 @@ describe('TokenMinter', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).transfer(user2.address, 50),
-    ).to.be.revertedWith('Receiver is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
   });
 
   it('Cannot transfer tokens from blacklisted address', async function () {
@@ -135,7 +135,7 @@ describe('TokenMinter', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).transfer(user2.address, 50),
-    ).to.be.revertedWith('Address is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
   });
 
   it('Cannot transferFrom tokens to blacklisted address', async function () {
@@ -185,7 +185,7 @@ describe('TokenMinter', function () {
       contracts.spdBtc
         .connect(user1)
         .transferFrom(owner.address, user2.address, 50),
-    ).to.be.revertedWith('Address is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
   });
 
   it('Cannot transfer when paused', async function () {
