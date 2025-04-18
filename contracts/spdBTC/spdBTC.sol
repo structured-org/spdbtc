@@ -37,11 +37,6 @@ contract SpdBTC is
     bytes32 internal constant _DECIMALS_SLOT = 0xb444bce2c2faee73cff3f3860f1e7aefa070df3bb7e677ea6c614d5fa351bcbd;
 
     /**
-     * @dev bytes32(uint256(keccak256('spdbtc.min_deposit')) - 1)
-     */
-    bytes32 internal constant _MIN_DEPOSIT_SLOT = 0xbce62e68157802c8ed24d035b5c787ad5ebab2025c1271106a3de18b0576f850;
-
-    /**
      * @dev bytes32(uint256(keccak256('spdbtc.max_deposit')) - 1)
      */
     bytes32 internal constant _MAX_DEPOSIT_SLOT = 0xefc9345aaccbddedbd416aca83be652dad079fbeb16a8b2bae7a6e1558da4b9c;
@@ -67,8 +62,6 @@ contract SpdBTC is
         }
     }
 
-    /// @notice Custom error when deposit is below the minimum limit.
-    error BelowMinDeposit(uint256 amount, uint256 minAmount);
     /// @notice Custom error when the receiver of a deposit or transfer is blacklisted.
     error ReceiverBlacklisted(address receiver);
     /// @notice Custom error when the sender of a transaction (deposit, transfer) is blacklisted.
@@ -116,6 +109,12 @@ contract SpdBTC is
         uint256 sharesMinted
     );
 
+    /**
+     * @notice Emitted when max deposit is updated.
+     * @param newMaxDeposit New max deposit.
+     */
+    event MaxDepositSet(uint256 newMaxDeposit);
+
     ////////// MODIFIERS ////////
 
     /**
@@ -156,7 +155,6 @@ contract SpdBTC is
         }
 
         StorageSlot.getAddressSlot(_ASSET_SLOT).value = params.asset;
-        StorageSlot.getUint256Slot(_MIN_DEPOSIT_SLOT).value = params.minDeposit;
         StorageSlot.getUint256Slot(_MAX_DEPOSIT_SLOT).value = params.maxDeposit;
         StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value = params.custodian;
     }
@@ -178,14 +176,6 @@ contract SpdBTC is
      */
     function isBlacklisted(address who) external view returns (bool) {
         return _getBlacklistStorage().value[who];
-    }
-
-    /**
-     * @notice Returns minimum deposit amount.
-     * @return Minimum deposit amount.
-     */
-    function minDeposit() external view returns (uint256) {
-        return StorageSlot.getUint256Slot(_MIN_DEPOSIT_SLOT).value;
     }
 
     /**
@@ -285,6 +275,16 @@ contract SpdBTC is
     }
 
     /**
+     * @notice Sets the max deposit limit of the contract.
+     * @dev Can only be called by the owner.
+     * @param _maxDeposit New max deposit.
+     */
+    function setMaxDeposit(uint256 _maxDeposit) external onlyOwner {
+        StorageSlot.getUint256Slot(_MAX_DEPOSIT_SLOT).value = _maxDeposit;
+        emit MaxDepositSet(_maxDeposit);
+    }
+
+    /**
      * @notice Updates the custodian address.
      * @dev Can only be called by the owner.
      * @param newCustodian The address of the new custodian.
@@ -341,17 +341,12 @@ contract SpdBTC is
      * @param receiver The address to receive the minted spdBTC
      */
     function _isValidDeposit(uint256 amount, address receiver) internal view {
-        uint256 min = StorageSlot.getUint256Slot(_MIN_DEPOSIT_SLOT).value;
-        if (amount < min) {
-            revert BelowMinDeposit(amount, min);
-        }
-
         if (_getBlacklistStorage().value[receiver]) {
             revert ReceiverBlacklisted(receiver);
         }
 
         uint256 maxAssets = StorageSlot.getUint256Slot(_MAX_DEPOSIT_SLOT).value;
-        if (amount > maxAssets) {
+        if (totalSupply() + amount > maxAssets) {
             revert ExceededMaxDeposit(receiver, amount, maxAssets);
         }
     }
