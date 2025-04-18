@@ -35,7 +35,6 @@ describe('TokenMinter', function () {
           asset: await contracts.tokenMinter.getAddress(),
           name: 'spdBTC',
           symbol: 'spdBTC',
-          minDeposit: 0,
           maxDeposit: Math.pow(2, 52),
           custodian: await spdBtcImplementation.getAddress(),
         },
@@ -57,7 +56,6 @@ describe('TokenMinter', function () {
         asset: await contracts.tokenMinter.getAddress(),
         name: 'spdBTC',
         symbol: 'spdBTC',
-        minDeposit: 1000,
         maxDeposit: Math.pow(2, 52),
         custodian: await contracts.spdBtc.getAddress(),
       }),
@@ -232,4 +230,19 @@ describe('TokenMinter', function () {
       contracts.spdBtc.deposit(100, owner.address),
     ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
   });
+
+  it('Cannot exceed max deposit', async function () {
+    const mintAmount = ethers.parseUnits('1000', 18);
+    await contracts.tokenMinter.mint(owner.address, mintAmount);
+    await contracts.tokenMinter.allow(
+      owner.address,
+      await contracts.spdBtc.getAddress(),
+    );
+    await contracts.spdBtc.setMaxDeposit(500);
+    await contracts.spdBtc.deposit(300, user1.address);
+
+    await expect(
+      contracts.spdBtc.deposit(300, user1.address),
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'ExceededMaxDeposit');
+  })
 });
