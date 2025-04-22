@@ -12,3 +12,11 @@ struct ProductParams {
     uint256 maxDeposit;  // Maximum deposit amount.
     address custodian;   // Custodian address.
 }
+
+/**
+ * @dev Storage layout for the blacklist mapping.
+ * Uses a struct to store the mapping at a specific storage slot.
+ */
+struct BlacklistStorage {
+    mapping(address => bool) value;
+}
