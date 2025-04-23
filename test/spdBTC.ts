@@ -80,7 +80,7 @@ describe('TokenMinter', function () {
     expect(balanceSpdBtc).to.equal(123);
   });
 
-  it('Funds custodian after a deposit', async function() {
+  it('Funds custodian after a deposit', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
@@ -90,7 +90,7 @@ describe('TokenMinter', function () {
     await contracts.spdBtc.deposit(100, user1.address);
 
     expect(
-      await contracts.tokenMinter.balanceOf(custodian.address)
+      await contracts.tokenMinter.balanceOf(custodian.address),
     ).to.be.equal(100n);
   });
 
@@ -365,7 +365,7 @@ describe('TokenMinter', function () {
       );
     });
 
-    it('Burns spdBTC and transfers WBTC after processing a request', async function() {
+    it('Burns spdBTC and transfers WBTC after processing a request', async function () {
       await contracts.tokenMinter.mint(user1.address, 500);
       await contracts.tokenMinter.mint(owner.address, 1000);
       await contracts.tokenMinter.allow(
@@ -383,8 +383,39 @@ describe('TokenMinter', function () {
       expect(await contracts.tokenMinter.balanceOf(user1)).to.be.equal(400n);
       expect(await contracts.tokenMinter.balanceOf(owner)).to.be.equal(800n);
       expect(
-        await contracts.tokenMinter.balanceOf(custodian.address)
-      ).to.be.equal(300n)
-    })
+        await contracts.tokenMinter.balanceOf(custodian.address),
+      ).to.be.equal(300n);
+    });
+
+    it('Cannot request on pause', async function () {
+      const mintAmount = ethers.parseUnits('1000', 18);
+      await contracts.tokenMinter.mint(user1.address, mintAmount);
+      await contracts.tokenMinter.allow(
+        user1.address,
+        await contracts.spdBtc.getAddress(),
+      );
+      await contracts.spdBtc.connect(user1).deposit(300, user1.address);
+      await contracts.spdBtc.setContractPaused(true);
+
+      await expect(
+        contracts.spdBtc.connect(user1).requestWithdrawal(50),
+      ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
+    });
+
+    it('Cannot cancel request on pause', async function () {
+      const mintAmount = ethers.parseUnits('1000', 18);
+      await contracts.tokenMinter.mint(user1.address, mintAmount);
+      await contracts.tokenMinter.allow(
+        user1.address,
+        await contracts.spdBtc.getAddress(),
+      );
+      await contracts.spdBtc.connect(user1).deposit(300, user1.address);
+      await contracts.spdBtc.connect(user1).requestWithdrawal(50);
+      await contracts.spdBtc.setContractPaused(true);
+
+      await expect(
+        contracts.spdBtc.connect(user1).cancelWithdrawal(),
+      ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
+    });
   });
 });
