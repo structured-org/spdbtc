@@ -311,7 +311,11 @@ contract SpdBTC is
      * @notice Locks the requested amount of user funds and stores a withdrawal request.
      * @param value The requested amount.
      */
-    function requestWithdrawal(uint256 value) external {
+    function requestWithdrawal(uint256 value)
+        external
+        whenNotPaused
+        notBlacklisted
+    {
         uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
         if (storedRequest != 0) {
             revert WithdrawalRequestExists(_msgSender(), storedRequest);
@@ -326,7 +330,11 @@ contract SpdBTC is
     /**
      * @notice Cancels a withdrawal request and returns locked funds back to user.
      */
-    function cancelWithdrawal() external {
+    function cancelWithdrawal()
+        external
+        whenNotPaused
+        notBlacklisted
+    {
         uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
         if (storedRequest != 0) {
             _transfer(address(this), _msgSender(), storedRequest);
@@ -342,16 +350,21 @@ contract SpdBTC is
      * @param user The user whose withdrawal request to process.
      * @param value The withdrawal amount requested by user.
      */
-    function processWithdrawal(address user, uint256 value) external onlyOwner {
+    function processWithdrawal(address user, uint256 value)
+        external
+        nonReentrant
+        onlyOwner
+    {
         uint256 storedRequest = _getWithdrawalRequestsStorage().value[user];
         if (storedRequest != value) {
             revert InvalidWithdrawalRequest(user, value, storedRequest);
         }
 
+        _getWithdrawalRequestsStorage().value[user] = 0;
+        _transfer(address(this), address(0), value);
+
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
         _asset.safeTransferFrom(_msgSender(), user, value);
-        _transfer(address(this), address(0), value);
-        _getWithdrawalRequestsStorage().value[user] = 0;
 
         emit WithdrawalProcessed(user, value);
     }
@@ -460,9 +473,11 @@ contract SpdBTC is
         address receiver,
         uint256 amount
     ) internal {
+        _mint(receiver, amount);
+
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
         _asset.safeTransferFrom(caller, StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
-        _mint(receiver, amount);
+
         emit Deposit(caller, receiver, amount, amount);
     }
 }
