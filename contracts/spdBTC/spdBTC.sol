@@ -361,7 +361,7 @@ contract SpdBTC is
         }
 
         _getWithdrawalRequestsStorage().value[user] = 0;
-        _transfer(address(this), address(0), value);
+        _update(address(this), address(0), value);
 
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
         _asset.safeTransferFrom(_msgSender(), user, value);
