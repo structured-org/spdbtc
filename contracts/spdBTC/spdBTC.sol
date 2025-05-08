@@ -10,7 +10,7 @@ import { StorageSlot } from "@openzeppelin/contracts/utils/StorageSlot.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { ProductParams, BlacklistStorage } from "./interfaces/IspdBTC.sol";
+import { ProductParams, BlacklistStorage, WithdrawalRequestsStorage } from "./interfaces/IspdBTC.sol";
 
 /**
  * @title spdBTC
@@ -53,12 +53,28 @@ contract SpdBTC is
     bytes32 internal constant _BLACKLIST_SLOT = 0x1b78fe6e90a13fd3613f6765435a41cc68067e7d36c75ef0614e997d5fdd5a52;
 
     /**
+     * @notice Withdrawal requests, one per user. Zero value means request doesn't exist
+     * @dev bytes32(uint256(keccak256('spdbtc.withdrawal_requests')) - 1)
+     */
+    bytes32 internal constant _WITHDRAWAL_REQUESTS_SLOT = 0x7bf1fc2183ab3f74a444018e145cffd7eb895bd15f852578c1b1954372d8ed46;
+
+    /**
      * @dev Gets a pointer to the BlacklistStorage struct in storage.
      * @return $ A storage pointer to the BlacklistStorage struct.
      */
     function _getBlacklistStorage() internal pure returns (BlacklistStorage storage $) {
         assembly {
             $.slot := _BLACKLIST_SLOT
+        }
+    }
+
+    /**
+     * @notice Gets a pointer to the WithdrawalRequestStorage struct in storage.
+     * @return $ A storage pointer to the WithdrawalRequestStorage struct.
+     */
+    function _getWithdrawalRequestsStorage() internal pure returns (WithdrawalRequestsStorage storage $) {
+        assembly {
+            $.slot := _WITHDRAWAL_REQUESTS_SLOT
         }
     }
 
@@ -72,6 +88,10 @@ contract SpdBTC is
     error FundsSeizedFromNonBlacklistedUser(address user);
     /// @notice Custom error when deposit exceeds the maximum limit.
     error ExceededMaxDeposit(address receiver, uint256 amount, uint256 maxAmount);
+    /// @notice Custom error when withdrawal request already exists.
+    error WithdrawalRequestExists(address user, uint256 amount);
+    /// @notice Custom error when withdrawal request amount expected by owner differs from the actual requested amount.
+    error InvalidWithdrawalRequest(address user, uint256 expected, uint256 actual);
 
     /**
      * @notice Emitted when the custodian address is updated.
@@ -112,6 +132,34 @@ contract SpdBTC is
      * @param newMaxDeposit New max deposit.
      */
     event MaxDepositSet(uint256 newMaxDeposit);
+
+    /**
+     * @notice Emitted when user requests a withdrawal.
+     * @param user The address who performed a request.
+     * @param amount The requested amount.
+     */
+    event WithdrawalRequested(
+        address indexed user,
+        uint256 amount
+    );
+
+    /**
+     * @notice Emitted when user cancels a withdrawal request.
+     * @param user The address who canceled a request.
+     */
+    event WithdrawalCanceled(
+        address indexed user
+    );
+
+    /**
+     * @notice Emitted when owner fulfills a withdrawal request.
+     * @param user The address who performed a request.
+     * @param amount The requested amount.
+     */
+    event WithdrawalProcessed(
+        address indexed user,
+        uint256 amount
+    );
 
     ////////// MODIFIERS ////////
 
@@ -257,6 +305,70 @@ contract SpdBTC is
         return super.transferFrom(from, to, value);
     }
 
+    ////////// WITHDRAWAL FUNCTIONS ////////
+
+    /**
+     * @notice Locks the requested amount of user funds and stores a withdrawal request.
+     * @param value The requested amount.
+     */
+    function requestWithdrawal(uint256 value)
+        external
+        whenNotPaused
+        notBlacklisted
+    {
+        uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
+        if (storedRequest != 0) {
+            revert WithdrawalRequestExists(_msgSender(), storedRequest);
+        }
+
+        _transfer(_msgSender(), address(this), value);
+        _getWithdrawalRequestsStorage().value[_msgSender()] = value;
+
+        emit WithdrawalRequested(_msgSender(), value);
+    }
+
+    /**
+     * @notice Cancels a withdrawal request and returns locked funds back to user.
+     */
+    function cancelWithdrawal()
+        external
+        whenNotPaused
+        notBlacklisted
+    {
+        uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
+        if (storedRequest != 0) {
+            _transfer(address(this), _msgSender(), storedRequest);
+            _getWithdrawalRequestsStorage().value[_msgSender()] = 0;
+        }
+
+        emit WithdrawalCanceled(_msgSender());
+    }
+
+    /**
+     * @notice Collects WBTC from owner and sends to user, burns spdBTC and erases withdrawal request.
+     * @dev Can only be called by the owner.
+     * @param user The user whose withdrawal request to process.
+     * @param value The withdrawal amount requested by user.
+     */
+    function processWithdrawal(address user, uint256 value)
+        external
+        nonReentrant
+        onlyOwner
+    {
+        uint256 storedRequest = _getWithdrawalRequestsStorage().value[user];
+        if (storedRequest != value) {
+            revert InvalidWithdrawalRequest(user, value, storedRequest);
+        }
+
+        _getWithdrawalRequestsStorage().value[user] = 0;
+        _update(address(this), address(0), value);
+
+        IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
+        _asset.safeTransferFrom(_msgSender(), user, value);
+
+        emit WithdrawalProcessed(user, value);
+    }
+
     ////////// ADMIN FUNCTIONS ////////
 
     /**
@@ -361,9 +473,11 @@ contract SpdBTC is
         address receiver,
         uint256 amount
     ) internal {
+        _mint(receiver, amount);
+
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
         _asset.safeTransferFrom(caller, StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
-        _mint(receiver, amount);
+
         emit Deposit(caller, receiver, amount, amount);
     }
 }

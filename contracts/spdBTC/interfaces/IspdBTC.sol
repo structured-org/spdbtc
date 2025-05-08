@@ -19,3 +19,11 @@ struct ProductParams {
 struct BlacklistStorage {
     mapping(address => bool) value;
 }
+
+/**
+ * @dev Storage layout for the withdrawal request mapping.
+ * Uses a struct to store the mapping at a specific storage slot.
+ */
+struct WithdrawalRequestsStorage {
+    mapping(address => uint256) value;
+}
