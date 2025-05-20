@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "deploy": "npx hardhat run deployments/deploy.ts --network sepolia",
+    "deploy:local": "npx hardhat run deployments/deploy.ts --network hardhat",
     "test": "npx hardhat test --network hardhat",
     "solhint": "npx solhint contracts/**/*.sol",
     "lint": "eslint \"**/*.{ts,tsx}\" -f compact",
