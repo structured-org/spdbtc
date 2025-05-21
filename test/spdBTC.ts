@@ -418,7 +418,7 @@ describe('spdBTC', function () {
       ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
     });
 
-    it('Cannot process request when paused', async function() {
+    it('Cannot process request when paused', async function () {
       await contracts.tokenMinter.mint(user1.address, 500);
       await contracts.tokenMinter.mint(owner.address, 1000);
       await contracts.tokenMinter.allow(
