@@ -175,6 +175,10 @@ contract SpdBTC is
 
     ////////// INITIALIZATION FUNCTIONS ////////
 
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @notice Initializes the product.
      * @dev Can only be called by the owner and only once.
@@ -337,8 +341,8 @@ contract SpdBTC is
     {
         uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
         if (storedRequest != 0) {
-            _transfer(address(this), _msgSender(), storedRequest);
             _getWithdrawalRequestsStorage().value[_msgSender()] = 0;
+            _transfer(address(this), _msgSender(), storedRequest);
         }
 
         emit WithdrawalCanceled(_msgSender());
@@ -353,8 +357,13 @@ contract SpdBTC is
     function processWithdrawal(address user, uint256 value)
         external
         nonReentrant
+        whenNotPaused
         onlyOwner
     {
+        if (_getBlacklistStorage().value[user]) {
+            revert ReceiverBlacklisted(user);
+        }
+
         uint256 storedRequest = _getWithdrawalRequestsStorage().value[user];
         if (storedRequest != value) {
             revert InvalidWithdrawalRequest(user, value, storedRequest);
