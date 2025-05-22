@@ -5,8 +5,11 @@
   "license": "MIT",
   "scripts": {
     "deploy:tokenminter:sepolia": "npx hardhat run deployments/tokenMinter.ts --network sepolia",
+    "deploy:tokenminter:ethereum": "npx hardhat run deployments/tokenMinter.ts --network ethereum",
     "deploy:spdbtc:sepolia": "npx hardhat run deployments/spdBtc.ts --network sepolia",
+    "deploy:spdbtc:ethereum": "npx hardhat run deployments/spdBtc.ts --network ethereum",
     "deploy:ossifiableproxy:sepolia": "npx hardhat run deployments/ossifiableProxy.ts --network sepolia",
+    "deploy:ossifiableproxy:ethereum": "npx hardhat run deployments/ossifiableProxy.ts --network ethereum",
     "test": "npx hardhat test --network hardhat",
     "solhint": "npx solhint contracts/**/*.sol",
     "lint": "eslint \"**/*.{ts,tsx}\" -f compact",
