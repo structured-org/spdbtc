@@ -2,7 +2,7 @@ import { ethers } from 'hardhat';
 import { expect } from 'chai';
 import { FunctionFragment } from 'ethers';
 
-describe('TokenMinter', function () {
+describe('spdBTC', function () {
   const contracts: {
     tokenMinter?: any;
     spdBtc?: any;
@@ -416,6 +416,46 @@ describe('TokenMinter', function () {
       await expect(
         contracts.spdBtc.connect(user1).cancelWithdrawal(),
       ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
+    });
+
+    it('Cannot process request when paused', async function() {
+      await contracts.tokenMinter.mint(user1.address, 500);
+      await contracts.tokenMinter.mint(owner.address, 1000);
+      await contracts.tokenMinter.allow(
+        user1.address,
+        await contracts.spdBtc.getAddress(),
+      );
+      await contracts.tokenMinter.allow(
+        owner.address,
+        await contracts.spdBtc.getAddress(),
+      );
+      await contracts.spdBtc.connect(user1).deposit(300, user1.address);
+      await contracts.spdBtc.connect(user1).requestWithdrawal(200);
+      await contracts.spdBtc.setContractPaused(true);
+
+      await expect(
+        contracts.spdBtc.processWithdrawal(user1.address, 200),
+      ).to.be.revertedWithCustomError(contracts.spdBtc, 'EnforcedPause');
+    });
+
+    it('Cannot process request to blacklisted user', async function () {
+      await contracts.tokenMinter.mint(user1.address, 500);
+      await contracts.tokenMinter.mint(owner.address, 1000);
+      await contracts.tokenMinter.allow(
+        user1.address,
+        await contracts.spdBtc.getAddress(),
+      );
+      await contracts.tokenMinter.allow(
+        owner.address,
+        await contracts.spdBtc.getAddress(),
+      );
+      await contracts.spdBtc.connect(user1).deposit(300, user1.address);
+      await contracts.spdBtc.connect(user1).requestWithdrawal(200);
+      await contracts.spdBtc.setBlacklisted(user1.address, true);
+
+      await expect(
+        contracts.spdBtc.processWithdrawal(user1.address, 200),
+      ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
     });
   });
 });
