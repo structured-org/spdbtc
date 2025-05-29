@@ -485,7 +485,8 @@ contract SpdBTC is
         _mint(receiver, amount);
 
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
-        _asset.safeTransferFrom(caller, StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
+        _asset.safeTransferFrom(caller, address(this), amount);
+        _asset.safeTransfer(StorageSlot.getAddressSlot(_CUSTODIAN_SLOT).value, amount);
 
         emit Deposit(caller, receiver, amount, amount);
     }
