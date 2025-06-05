@@ -90,8 +90,8 @@ contract SpdBTC is
     error ExceededMaxDeposit(address receiver, uint256 amount, uint256 maxAmount);
     /// @notice Custom error when withdrawal request already exists.
     error WithdrawalRequestExists(address user, uint256 amount);
-    /// @notice Custom error when withdrawal request amount expected by owner differs from the actual requested amount.
-    error InvalidWithdrawalRequest(address user, uint256 expected, uint256 actual);
+    /// @notice Custom error when withdrawal request does not exist.
+    error NoWithdrawalRequest(address user);
 
     /**
      * @notice Emitted when the custodian address is updated.
@@ -154,11 +154,13 @@ contract SpdBTC is
     /**
      * @notice Emitted when owner fulfills a withdrawal request.
      * @param user The address who performed a request.
-     * @param amount The requested amount.
+     * @param requestedAmount The requested amount.
+     * @param withdrawedAmount The withdrawed amount.
      */
     event WithdrawalProcessed(
         address indexed user,
-        uint256 amount
+        uint256 requestedAmount,
+        uint256 withdrawedAmount
     );
 
     ////////// MODIFIERS ////////
@@ -251,6 +253,15 @@ contract SpdBTC is
      */
     function decimals() public view virtual override returns (uint8) {
         return uint8(StorageSlot.getUint256Slot(_DECIMALS_SLOT).value);
+    }
+
+    /**
+     * @notice Returns the requested withdrawal amount by user.
+     * @param user The user who requested a withdrawal.
+     * @return The requested amount. Zero is a special value returned when no withdrawal was requested.
+     */
+    function withdrawalRequestOf(address user) public view returns (uint256) {
+        return _getWithdrawalRequestsStorage().value[user];
     }
 
     ////////// DEPOSIT FUNCTIONS ////////
@@ -352,7 +363,7 @@ contract SpdBTC is
      * @notice Collects WBTC from owner and sends to user, burns spdBTC and erases withdrawal request.
      * @dev Can only be called by the owner.
      * @param user The user whose withdrawal request to process.
-     * @param value The withdrawal amount requested by user.
+     * @param value WBTC amount to return to user.
      */
     function processWithdrawal(address user, uint256 value)
         external
@@ -365,17 +376,17 @@ contract SpdBTC is
         }
 
         uint256 storedRequest = _getWithdrawalRequestsStorage().value[user];
-        if (storedRequest != value) {
-            revert InvalidWithdrawalRequest(user, value, storedRequest);
+        if (storedRequest == 0) {
+            revert NoWithdrawalRequest(user);
         }
 
         _getWithdrawalRequestsStorage().value[user] = 0;
-        _update(address(this), address(0), value);
+        _update(address(this), address(0), storedRequest);
 
         IERC20 _asset = IERC20(StorageSlot.getAddressSlot(_ASSET_SLOT).value);
         _asset.safeTransferFrom(_msgSender(), user, value);
 
-        emit WithdrawalProcessed(user, value);
+        emit WithdrawalProcessed(user, storedRequest, value);
     }
 
     ////////// ADMIN FUNCTIONS ////////
