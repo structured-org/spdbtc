@@ -29,7 +29,7 @@ const config: HardhatUserConfig = {
     ethereum: {
       url: ETHEREUM_API_URL,
       accounts: [`0x${ETHEREUM_PRIVATE_KEY}`],
-    }
+    },
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,

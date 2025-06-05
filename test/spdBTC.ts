@@ -289,7 +289,11 @@ describe('spdBTC', function () {
       );
       await contracts.spdBtc.connect(user1).deposit(300, user1.address);
 
+      expect(await contracts.spdBtc.withdrawalRequestOf(user1)).to.be.equal(0n);
       await contracts.spdBtc.connect(user1).requestWithdrawal(200);
+      expect(await contracts.spdBtc.withdrawalRequestOf(user1)).to.be.equal(
+        200n,
+      );
       expect(await contracts.spdBtc.balanceOf(user1)).to.be.equal(100n);
       expect(
         await contracts.spdBtc.balanceOf(await contracts.spdBtc.getAddress()),
@@ -347,22 +351,17 @@ describe('spdBTC', function () {
       ).to.be.equal(0n);
     });
 
-    it('Cannot process a withdrawal of unexpected value', async function () {
-      const mintAmount = ethers.parseUnits('1000', 18);
-      await contracts.tokenMinter.mint(user1.address, mintAmount);
+    it('Cannot process a withdrawal when it does not exist', async function () {
+      await contracts.tokenMinter.mint(user1.address, 500);
       await contracts.tokenMinter.allow(
         user1.address,
         await contracts.spdBtc.getAddress(),
       );
       await contracts.spdBtc.connect(user1).deposit(300, user1.address);
-      await contracts.spdBtc.connect(user1).requestWithdrawal(200);
 
       await expect(
-        contracts.spdBtc.processWithdrawal(user1.address, 100),
-      ).to.be.revertedWithCustomError(
-        contracts.spdBtc,
-        'InvalidWithdrawalRequest',
-      );
+        contracts.spdBtc.processWithdrawal(user1.address, 300),
+      ).to.be.revertedWithCustomError(contracts.spdBtc, 'NoWithdrawalRequest');
     });
 
     it('Burns spdBTC and transfers WBTC after processing a request', async function () {
@@ -379,12 +378,15 @@ describe('spdBTC', function () {
       await contracts.spdBtc.connect(user1).deposit(300, user1.address);
       await contracts.spdBtc.connect(user1).requestWithdrawal(200);
 
-      await contracts.spdBtc.processWithdrawal(user1.address, 200);
-      expect(await contracts.tokenMinter.balanceOf(user1)).to.be.equal(400n);
-      expect(await contracts.tokenMinter.balanceOf(owner)).to.be.equal(800n);
+      await contracts.spdBtc.processWithdrawal(user1.address, 300);
+      expect(await contracts.tokenMinter.balanceOf(user1)).to.be.equal(500n);
+      expect(await contracts.tokenMinter.balanceOf(owner)).to.be.equal(700n);
       expect(
         await contracts.tokenMinter.balanceOf(custodian.address),
       ).to.be.equal(300n);
+      expect(
+        await contracts.spdBtc.balanceOf(await contracts.spdBtc.getAddress()),
+      ).to.be.equal(0n);
     });
 
     it('Cannot request on pause', async function () {
