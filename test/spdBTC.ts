@@ -72,6 +72,8 @@ describe('spdBTC', function () {
       await contracts.spdBtc.getAddress(),
     );
 
+    await contracts.spdBtc.setBlacklisted(user1.address, true);
+
     const balance = await contracts.tokenMinter.balanceOf(owner.address);
     expect(balance).to.equal(mintAmount);
     await contracts.spdBtc.deposit(123, owner.address);
