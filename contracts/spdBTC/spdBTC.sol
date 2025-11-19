@@ -207,7 +207,7 @@ contract SpdBTC is
   /**
    * @dev Modifier to ensure the sender is not blacklisted.
    */
-  modifier notBlacklisted(address user) {
+  modifier _notBlacklisted(address user) {
     if (_getBlacklistStorage().value[user]) {
       revert UserBlacklisted(user);
     }
@@ -217,7 +217,7 @@ contract SpdBTC is
   /**
    * @dev Modifier to ensure the sender is whitelisted.
    */
-  modifier isWhitelisted(address user) {
+  modifier _isWhitelisted(address user) {
     if (!_getWhitelistStorage().value[user]) {
       revert UserIsNotWhitelisted(user);
     }
@@ -280,6 +280,15 @@ contract SpdBTC is
   }
 
   /**
+   * @notice Returns whitelist status for specified user.
+   * @param who User address to query whitelist status for.
+   * @return Is user whitelisted.
+   */
+  function isWhitelisted(address who) external view returns (bool) {
+    return _getWhitelistStorage().value[who];
+  }
+
+  /**
    * @notice Returns maximum deposit amount.
    * @return Maximum deposit amount.
    */
@@ -324,7 +333,7 @@ contract SpdBTC is
   function deposit(
     uint256 amount,
     address receiver
-  ) public nonReentrant whenNotPaused isWhitelisted(_msgSender()) isWhitelisted(receiver) notBlacklisted(_msgSender()) notBlacklisted(receiver) returns (uint256) {
+  ) public nonReentrant whenNotPaused _isWhitelisted(_msgSender()) _isWhitelisted(receiver) _notBlacklisted(_msgSender()) _notBlacklisted(receiver) returns (uint256) {
     _isValidDeposit(amount, receiver);
     _deposit(_msgSender(), receiver, amount);
     return amount;
@@ -335,7 +344,7 @@ contract SpdBTC is
   function transfer(
     address to,
     uint256 value
-  ) public override nonReentrant whenNotPaused notBlacklisted(_msgSender()) notBlacklisted(to) returns (bool) {
+  ) public override nonReentrant whenNotPaused _notBlacklisted(_msgSender()) _notBlacklisted(to) returns (bool) {
     return super.transfer(to, value);
   }
 
@@ -343,7 +352,7 @@ contract SpdBTC is
     address from,
     address to,
     uint256 value
-  ) public override nonReentrant whenNotPaused notBlacklisted(_msgSender()) notBlacklisted(from) notBlacklisted(to) returns (bool) {
+  ) public override nonReentrant whenNotPaused _notBlacklisted(_msgSender()) _notBlacklisted(from) _notBlacklisted(to) returns (bool) {
     return super.transferFrom(from, to, value);
   }
 
@@ -355,7 +364,7 @@ contract SpdBTC is
    */
   function requestWithdrawal(
     uint256 value
-  ) external whenNotPaused notBlacklisted(_msgSender()) {
+  ) external whenNotPaused _notBlacklisted(_msgSender()) {
     uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
     if (storedRequest != 0) {
       revert WithdrawalRequestExists(_msgSender(), storedRequest);
@@ -370,7 +379,7 @@ contract SpdBTC is
   /**
    * @notice Cancels a withdrawal request and returns locked funds back to user.
    */
-  function cancelWithdrawal() external whenNotPaused notBlacklisted(_msgSender()) {
+  function cancelWithdrawal() external whenNotPaused _notBlacklisted(_msgSender()) {
     uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
     if (storedRequest != 0) {
       _getWithdrawalRequestsStorage().value[_msgSender()] = 0;
@@ -389,7 +398,7 @@ contract SpdBTC is
   function processWithdrawal(
     address user,
     uint256 value
-  ) external nonReentrant whenNotPaused notBlacklisted(user) onlyOwner {
+  ) external nonReentrant whenNotPaused _notBlacklisted(user) onlyOwner {
     uint256 storedRequest = _getWithdrawalRequestsStorage().value[user];
     if (storedRequest == 0) {
       revert NoWithdrawalRequest(user);
@@ -463,14 +472,14 @@ contract SpdBTC is
    * @notice Whitelists or unwhitelists an address.
    * @dev Can only be called by the owner.
    * @param user The address to whitelist or unwhitelist.
-   * @param _isWhitelisted Whether to whitelist or unwhitelist the address.
+   * @param isWhitelisted_ Whether to whitelist or unwhitelist the address.
    */
-  function setWhitelisted(address user, bool _isWhitelisted) external onlyOwner {
+  function setWhitelisted(address user, bool isWhitelisted_) external onlyOwner {
     if (user == address(0)) {
       revert ZeroAddressNotAllowed();
     }
-    _getWhitelistStorage().value[user] = _isWhitelisted;
-    emit Whitelisted(user, _isWhitelisted);
+    _getWhitelistStorage().value[user] = isWhitelisted_;
+    emit Whitelisted(user, isWhitelisted_);
   }
 
   /**
