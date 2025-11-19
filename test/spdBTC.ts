@@ -111,7 +111,7 @@ describe('spdBTC', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).deposit(100, user2.address),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderIsNotWhitelisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserIsNotWhitelisted');
   });
 
   it('Cannot deposit to not whitelisted address', async function () {
@@ -129,7 +129,7 @@ describe('spdBTC', function () {
       contracts.spdBtc.connect(user1).deposit(100, user2.address),
     ).to.be.revertedWithCustomError(
       contracts.spdBtc,
-      'ReceiverIsNotWhitelisted',
+      'UserIsNotWhitelisted',
     );
   });
 
@@ -150,7 +150,7 @@ describe('spdBTC', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).transfer(user2.address, 50),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transfer tokens from blacklisted address', async function () {
@@ -170,7 +170,7 @@ describe('spdBTC', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).transfer(user2.address, 50),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transferFrom tokens to blacklisted address', async function () {
@@ -232,7 +232,7 @@ describe('spdBTC', function () {
       contracts.spdBtc
         .connect(user1)
         .transferFrom(owner.address, user2.address, 50),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transfer when paused', async function () {
@@ -531,7 +531,7 @@ describe('spdBTC', function () {
 
       await expect(
         contracts.spdBtc.processWithdrawal(user1.address, 200),
-      ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
+      ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
     });
   });
 });
