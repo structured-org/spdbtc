@@ -10,7 +10,7 @@ Before deploying anything, copy `.env.example` to `.env` and fill it.
 
 Since the contract will always be behind proxy, the implementation itself requires zero configuration.
 Just run `npx hardhat ignition deploy ignition/modules/spdBTCImplementation.ts --network ethereum --verify`.
-Thenn, save resulting address for step 2.
+Then, save resulting address for step 2.
 
 ### Step 2. Deploy OssifiableProxy
 
