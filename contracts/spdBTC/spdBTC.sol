@@ -115,6 +115,8 @@ contract SpdBTC is
 
   /// @notice Custom error when the user is not whitelisted.
   error UserIsNotWhitelisted(address user);
+  /// @notice Custom error when the user is whitelisted.
+  error UserWhitelisted(address user);
   /// @notice Custom error when the user is blacklisted.
   error UserBlacklisted(address user);
   /// @notice Custom error when attempting to blacklist the zero address.
@@ -275,7 +277,7 @@ contract SpdBTC is
    * @param who User address to query blacklist status for.
    * @return Is user blacklisted.
    */
-  function isBlacklisted(address who) external view returns (bool) {
+  function isBlacklisted(address who) public view returns (bool) {
     return _getBlacklistStorage().value[who];
   }
 
@@ -284,7 +286,7 @@ contract SpdBTC is
    * @param who User address to query whitelist status for.
    * @return Is user whitelisted.
    */
-  function isWhitelisted(address who) external view returns (bool) {
+  function isWhitelisted(address who) public view returns (bool) {
     return _getWhitelistStorage().value[who];
   }
 
@@ -455,17 +457,22 @@ contract SpdBTC is
    * @notice Blacklists or unblacklists an address.
    * @dev Can only be called by the owner.
    * @param user The address to blacklist or unblacklist.
-   * @param _isBlacklisted Whether to blacklist or unblacklist the address.
+   * @param isBlacklisted_ Whether to blacklist or unblacklist the address.
    */
   function setBlacklisted(
     address user,
-    bool _isBlacklisted
+    bool isBlacklisted_
   ) external onlyOwner {
     if (user == address(0)) {
       revert ZeroAddressNotAllowed();
     }
-    _getBlacklistStorage().value[user] = _isBlacklisted;
-    emit Blacklisted(user, _isBlacklisted);
+
+    if (isBlacklisted_ && isWhitelisted(user)) {
+      revert UserWhitelisted(user);
+    }
+
+    _getBlacklistStorage().value[user] = isBlacklisted_;
+    emit Blacklisted(user, isBlacklisted_);
   }
 
   /**
@@ -478,6 +485,11 @@ contract SpdBTC is
     if (user == address(0)) {
       revert ZeroAddressNotAllowed();
     }
+
+    if (isWhitelisted_ && isBlacklisted(user)) {
+      revert UserBlacklisted(user);
+    }
+
     _getWhitelistStorage().value[user] = isWhitelisted_;
     emit Whitelisted(user, isWhitelisted_);
   }
