@@ -1,6 +1,8 @@
-import { ethers } from 'hardhat';
 import { expect } from 'chai';
+import hre from 'hardhat';
 import { FunctionFragment } from 'ethers';
+
+const { ethers } = await hre.network.connect();
 
 describe('spdBTC', function () {
   const contracts: {
@@ -72,6 +74,8 @@ describe('spdBTC', function () {
       await contracts.spdBtc.getAddress(),
     );
 
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+
     const balance = await contracts.tokenMinter.balanceOf(owner.address);
     expect(balance).to.equal(mintAmount);
     await contracts.spdBtc.deposit(123, owner.address);
@@ -87,6 +91,10 @@ describe('spdBTC', function () {
       owner.address,
       await contracts.spdBtc.getAddress(),
     );
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+    await contracts.spdBtc.setWhitelisted(user1.address, true);
+
     await contracts.spdBtc.deposit(100, user1.address);
 
     expect(
@@ -94,9 +102,9 @@ describe('spdBTC', function () {
     ).to.be.equal(100n);
   });
 
-  it('Cannot deposit from blacklisted address', async function () {
+  it('Cannot deposit from not whitelisted address', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
-    await contracts.spdBtc.setBlacklisted(user1.address, true);
+
     await contracts.tokenMinter.mint(user1.address, mintAmount);
     await contracts.tokenMinter.allow(
       user1.address,
@@ -105,12 +113,14 @@ describe('spdBTC', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).deposit(100, user2.address),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserIsNotWhitelisted');
   });
 
-  it('Cannot deposit to blacklisted address', async function () {
+  it('Cannot deposit to not whitelisted address', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
-    await contracts.spdBtc.setBlacklisted(user2.address, true);
+
+    await contracts.spdBtc.setWhitelisted(user1.address, true);
+
     await contracts.tokenMinter.mint(user1.address, mintAmount);
     await contracts.tokenMinter.allow(
       user1.address,
@@ -119,73 +129,94 @@ describe('spdBTC', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).deposit(100, user2.address),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserIsNotWhitelisted');
   });
 
   it('Cannot transfer tokens to blacklisted address', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+    await contracts.spdBtc.setWhitelisted(user1.address, true);
     await contracts.spdBtc.setBlacklisted(user2.address, true);
+
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
       await contracts.spdBtc.getAddress(),
     );
+
     await contracts.spdBtc.deposit(100, user1.address);
 
     await expect(
       contracts.spdBtc.connect(user1).transfer(user2.address, 50),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transfer tokens from blacklisted address', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
       await contracts.spdBtc.getAddress(),
     );
-    await contracts.spdBtc.deposit(100, user1.address);
+    await contracts.spdBtc.deposit(100, owner.address);
+    await contracts.spdBtc.transfer(user1.address, 100);
+
     await contracts.spdBtc.setBlacklisted(user1.address, true);
 
     await expect(
       contracts.spdBtc.connect(user1).transfer(user2.address, 50),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transferFrom tokens to blacklisted address', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+    await contracts.spdBtc.setWhitelisted(user1.address, true);
+
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
       await contracts.spdBtc.getAddress(),
     );
+
     await contracts.spdBtc.deposit(100, user1.address);
     await contracts.spdBtc.connect(user1).approve(owner.address, 100);
     await contracts.spdBtc.setBlacklisted(user2.address, true);
 
-    expect(
+    await expect(
       contracts.spdBtc.transferFrom(user1.address, user2.address, 50),
-    ).to.be.revertedWith('Receiver is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transferFrom tokens from blacklisted address', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
       await contracts.spdBtc.getAddress(),
     );
-    await contracts.spdBtc.deposit(100, user1.address);
+    await contracts.spdBtc.deposit(100, owner.address);
+    await contracts.spdBtc.transfer(user1.address, 100);
+
     await contracts.spdBtc.connect(user1).approve(owner.address, 100);
     await contracts.spdBtc.setBlacklisted(user1.address, true);
 
-    expect(
+    await expect(
       contracts.spdBtc.transferFrom(user1.address, user2.address, 50),
-    ).to.be.revertedWith('Sender is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Blacklisted account cannot call transferFrom', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
@@ -199,11 +230,14 @@ describe('spdBTC', function () {
       contracts.spdBtc
         .connect(user1)
         .transferFrom(owner.address, user2.address, 50),
-    ).to.be.revertedWithCustomError(contracts.spdBtc, 'SenderBlacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transfer when paused', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
@@ -219,6 +253,10 @@ describe('spdBTC', function () {
 
   it('Cannot transferFrom when paused', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+    await contracts.spdBtc.setWhitelisted(user1.address, true);
+
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
@@ -249,6 +287,10 @@ describe('spdBTC', function () {
 
   it('Cannot exceed max deposit', async function () {
     const mintAmount = ethers.parseUnits('1000', 18);
+
+    await contracts.spdBtc.setWhitelisted(owner.address, true);
+    await contracts.spdBtc.setWhitelisted(user1.address, true);
+
     await contracts.tokenMinter.mint(owner.address, mintAmount);
     await contracts.tokenMinter.allow(
       owner.address,
@@ -262,9 +304,34 @@ describe('spdBTC', function () {
     ).to.be.revertedWithCustomError(contracts.spdBtc, 'ExceededMaxDeposit');
   });
 
+  it('Cannot whitelist blacklisted address', async function () {
+    await contracts.spdBtc.setBlacklisted(user1.address, true);
+
+    await expect(
+      contracts.spdBtc.setWhitelisted(user1.address, true)
+    ).to.be.revertedWithCustomError(
+      contracts.spdBtc,
+      'UserBlacklisted'
+    );
+  });
+
+  it('Cannot blacklist whitelisted address', async function () {
+    await contracts.spdBtc.setWhitelisted(user1.address, true);
+
+    await expect(
+      contracts.spdBtc.setBlacklisted(user1.address, true)
+    ).to.be.revertedWithCustomError(
+      contracts.spdBtc,
+      'UserWhitelisted'
+    );
+  });
+
   describe('Withdrawals', function () {
     it('Cannot request more than available', async function () {
       const mintAmount = ethers.parseUnits('1000', 18);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, mintAmount);
       await contracts.tokenMinter.allow(
         user1.address,
@@ -282,6 +349,9 @@ describe('spdBTC', function () {
 
     it('Locks user funds after requesting a withdrawal', async function () {
       const mintAmount = ethers.parseUnits('1000', 18);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, mintAmount);
       await contracts.tokenMinter.allow(
         user1.address,
@@ -302,6 +372,9 @@ describe('spdBTC', function () {
 
     it('Cannot request withdrawal twice', async function () {
       const mintAmount = ethers.parseUnits('1000', 18);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, mintAmount);
       await contracts.tokenMinter.allow(
         user1.address,
@@ -320,6 +393,9 @@ describe('spdBTC', function () {
 
     it('Refunds after cancelling a withdrawal', async function () {
       const mintAmount = ethers.parseUnits('1000', 18);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, mintAmount);
       await contracts.tokenMinter.allow(
         user1.address,
@@ -337,6 +413,9 @@ describe('spdBTC', function () {
 
     it('Is noop to cancel a non-existing request', async function () {
       const mintAmount = ethers.parseUnits('1000', 18);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, mintAmount);
       await contracts.tokenMinter.allow(
         user1.address,
@@ -353,6 +432,9 @@ describe('spdBTC', function () {
 
     it('Cannot process a withdrawal when it does not exist', async function () {
       await contracts.tokenMinter.mint(user1.address, 500);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.allow(
         user1.address,
         await contracts.spdBtc.getAddress(),
@@ -365,6 +447,8 @@ describe('spdBTC', function () {
     });
 
     it('Burns spdBTC and transfers WBTC after processing a request', async function () {
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, 500);
       await contracts.tokenMinter.mint(owner.address, 1000);
       await contracts.tokenMinter.allow(
@@ -391,6 +475,9 @@ describe('spdBTC', function () {
 
     it('Cannot request on pause', async function () {
       const mintAmount = ethers.parseUnits('1000', 18);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, mintAmount);
       await contracts.tokenMinter.allow(
         user1.address,
@@ -406,6 +493,9 @@ describe('spdBTC', function () {
 
     it('Cannot cancel request on pause', async function () {
       const mintAmount = ethers.parseUnits('1000', 18);
+
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, mintAmount);
       await contracts.tokenMinter.allow(
         user1.address,
@@ -421,6 +511,8 @@ describe('spdBTC', function () {
     });
 
     it('Cannot process request when paused', async function () {
+      await contracts.spdBtc.setWhitelisted(user1.address, true);
+
       await contracts.tokenMinter.mint(user1.address, 500);
       await contracts.tokenMinter.mint(owner.address, 1000);
       await contracts.tokenMinter.allow(
@@ -441,6 +533,8 @@ describe('spdBTC', function () {
     });
 
     it('Cannot process request to blacklisted user', async function () {
+      await contracts.spdBtc.setWhitelisted(owner.address, true);
+
       await contracts.tokenMinter.mint(user1.address, 500);
       await contracts.tokenMinter.mint(owner.address, 1000);
       await contracts.tokenMinter.allow(
@@ -451,13 +545,14 @@ describe('spdBTC', function () {
         owner.address,
         await contracts.spdBtc.getAddress(),
       );
-      await contracts.spdBtc.connect(user1).deposit(300, user1.address);
+      await contracts.spdBtc.deposit(300, owner.address);
+      await contracts.spdBtc.transfer(user1.address, 300);
       await contracts.spdBtc.connect(user1).requestWithdrawal(200);
       await contracts.spdBtc.setBlacklisted(user1.address, true);
 
       await expect(
         contracts.spdBtc.processWithdrawal(user1.address, 200),
-      ).to.be.revertedWithCustomError(contracts.spdBtc, 'ReceiverBlacklisted');
+      ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
     });
   });
 });

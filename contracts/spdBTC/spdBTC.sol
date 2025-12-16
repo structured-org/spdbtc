@@ -10,7 +10,7 @@ import {StorageSlot} from '@openzeppelin/contracts/utils/StorageSlot.sol';
 import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import {IERC20Metadata} from '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol';
-import {ProductParams, BlacklistStorage, WithdrawalRequestsStorage} from './interfaces/IspdBTC.sol';
+import {ProductParams, BlacklistStorage, WhitelistStorage, WithdrawalRequestsStorage} from './interfaces/IspdBTC.sol';
 
 /**
  * @title spdBTC
@@ -58,6 +58,13 @@ contract SpdBTC is
     0x1b78fe6e90a13fd3613f6765435a41cc68067e7d36c75ef0614e997d5fdd5a52;
 
   /**
+   * @notice Whitelist functionality
+   * @dev bytes32(uint256(keccak256('spdbtc.whitelist')) - 1)
+   */
+  bytes32 internal constant _WHITELIST_SLOT =
+    0xb6c7ee5a88dde46a513bb443506df08fc209973a5c243f72cf9afea89ed08251;
+
+  /**
    * @notice Withdrawal requests, one per user. Zero value means request doesn't exist
    * @dev bytes32(uint256(keccak256('spdbtc.withdrawal_requests')) - 1)
    */
@@ -79,6 +86,20 @@ contract SpdBTC is
   }
 
   /**
+   * @dev Gets a pointer to the WhitelistStorage struct in storage.
+   * @return $ A storage pointer to the WhitelistStorage struct.
+   */
+  function _getWhitelistStorage()
+    internal
+    pure
+    returns (WhitelistStorage storage $)
+  {
+    assembly {
+      $.slot := _WHITELIST_SLOT
+    }
+  }
+
+  /**
    * @notice Gets a pointer to the WithdrawalRequestStorage struct in storage.
    * @return $ A storage pointer to the WithdrawalRequestStorage struct.
    */
@@ -92,10 +113,12 @@ contract SpdBTC is
     }
   }
 
-  /// @notice Custom error when the receiver of a deposit or transfer is blacklisted.
-  error ReceiverBlacklisted(address receiver);
-  /// @notice Custom error when the sender of a transaction (deposit, transfer) is blacklisted.
-  error SenderBlacklisted(address sender);
+  /// @notice Custom error when the user is not whitelisted.
+  error UserIsNotWhitelisted(address user);
+  /// @notice Custom error when the user is whitelisted.
+  error UserWhitelisted(address user);
+  /// @notice Custom error when the user is blacklisted.
+  error UserBlacklisted(address user);
   /// @notice Custom error when attempting to blacklist the zero address.
   error ZeroAddressNotAllowed();
   /// @notice Custom error when attempting to seize funds from a non-blacklisted user.
@@ -106,6 +129,8 @@ contract SpdBTC is
   error WithdrawalRequestExists(address user, uint256 amount);
   /// @notice Custom error when withdrawal request does not exist.
   error NoWithdrawalRequest(address user);
+  /// @notice Custom error when the sender of a transaction (deposit) is not whitelisted.
+  error SenderIsNotWhitelisted(address sender);
 
   /**
    * @notice Emitted when the custodian address is updated.
@@ -119,6 +144,13 @@ contract SpdBTC is
    * @param blacklisted Whether the address is blacklisted.
    */
   event Blacklisted(address indexed user, bool blacklisted);
+
+  /**
+   * @notice Emitted when an address is whitelisted or unwhitelisted.
+   * @param user The affected address.
+   * @param whitelisted Whether the address is whitelisted.
+   */
+  event Whitelisted(address indexed user, bool whitelisted);
 
   /**
    * @notice Emitted when funds are seized from a blacklisted address.
@@ -177,9 +209,19 @@ contract SpdBTC is
   /**
    * @dev Modifier to ensure the sender is not blacklisted.
    */
-  modifier notBlacklisted() {
-    if (_getBlacklistStorage().value[_msgSender()]) {
-      revert SenderBlacklisted(_msgSender());
+  modifier _notBlacklisted(address user) {
+    if (_getBlacklistStorage().value[user]) {
+      revert UserBlacklisted(user);
+    }
+    _;
+  }
+
+  /**
+   * @dev Modifier to ensure the sender is whitelisted.
+   */
+  modifier _isWhitelisted(address user) {
+    if (!_getWhitelistStorage().value[user]) {
+      revert UserIsNotWhitelisted(user);
     }
     _;
   }
@@ -235,8 +277,17 @@ contract SpdBTC is
    * @param who User address to query blacklist status for.
    * @return Is user blacklisted.
    */
-  function isBlacklisted(address who) external view returns (bool) {
+  function isBlacklisted(address who) public view returns (bool) {
     return _getBlacklistStorage().value[who];
+  }
+
+  /**
+   * @notice Returns whitelist status for specified user.
+   * @param who User address to query whitelist status for.
+   * @return Is user whitelisted.
+   */
+  function isWhitelisted(address who) public view returns (bool) {
+    return _getWhitelistStorage().value[who];
   }
 
   /**
@@ -284,7 +335,7 @@ contract SpdBTC is
   function deposit(
     uint256 amount,
     address receiver
-  ) public nonReentrant whenNotPaused notBlacklisted returns (uint256) {
+  ) public nonReentrant whenNotPaused _isWhitelisted(_msgSender()) _isWhitelisted(receiver) _notBlacklisted(_msgSender()) _notBlacklisted(receiver) returns (uint256) {
     _isValidDeposit(amount, receiver);
     _deposit(_msgSender(), receiver, amount);
     return amount;
@@ -295,10 +346,7 @@ contract SpdBTC is
   function transfer(
     address to,
     uint256 value
-  ) public override nonReentrant whenNotPaused notBlacklisted returns (bool) {
-    if (_getBlacklistStorage().value[to]) {
-      revert ReceiverBlacklisted(to);
-    }
+  ) public override nonReentrant whenNotPaused _notBlacklisted(_msgSender()) _notBlacklisted(to) returns (bool) {
     return super.transfer(to, value);
   }
 
@@ -306,13 +354,7 @@ contract SpdBTC is
     address from,
     address to,
     uint256 value
-  ) public override nonReentrant whenNotPaused notBlacklisted returns (bool) {
-    if (_getBlacklistStorage().value[from]) {
-      revert SenderBlacklisted(from);
-    }
-    if (_getBlacklistStorage().value[to]) {
-      revert ReceiverBlacklisted(to);
-    }
+  ) public override nonReentrant whenNotPaused _notBlacklisted(_msgSender()) _notBlacklisted(from) _notBlacklisted(to) returns (bool) {
     return super.transferFrom(from, to, value);
   }
 
@@ -324,7 +366,7 @@ contract SpdBTC is
    */
   function requestWithdrawal(
     uint256 value
-  ) external whenNotPaused notBlacklisted {
+  ) external whenNotPaused _notBlacklisted(_msgSender()) {
     uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
     if (storedRequest != 0) {
       revert WithdrawalRequestExists(_msgSender(), storedRequest);
@@ -339,7 +381,7 @@ contract SpdBTC is
   /**
    * @notice Cancels a withdrawal request and returns locked funds back to user.
    */
-  function cancelWithdrawal() external whenNotPaused notBlacklisted {
+  function cancelWithdrawal() external whenNotPaused _notBlacklisted(_msgSender()) {
     uint256 storedRequest = _getWithdrawalRequestsStorage().value[_msgSender()];
     if (storedRequest != 0) {
       _getWithdrawalRequestsStorage().value[_msgSender()] = 0;
@@ -358,11 +400,7 @@ contract SpdBTC is
   function processWithdrawal(
     address user,
     uint256 value
-  ) external nonReentrant whenNotPaused onlyOwner {
-    if (_getBlacklistStorage().value[user]) {
-      revert ReceiverBlacklisted(user);
-    }
-
+  ) external nonReentrant whenNotPaused _notBlacklisted(user) onlyOwner {
     uint256 storedRequest = _getWithdrawalRequestsStorage().value[user];
     if (storedRequest == 0) {
       revert NoWithdrawalRequest(user);
@@ -419,17 +457,41 @@ contract SpdBTC is
    * @notice Blacklists or unblacklists an address.
    * @dev Can only be called by the owner.
    * @param user The address to blacklist or unblacklist.
-   * @param _isBlacklisted Whether to blacklist or unblacklist the address.
+   * @param isBlacklisted_ Whether to blacklist or unblacklist the address.
    */
   function setBlacklisted(
     address user,
-    bool _isBlacklisted
+    bool isBlacklisted_
   ) external onlyOwner {
     if (user == address(0)) {
       revert ZeroAddressNotAllowed();
     }
-    _getBlacklistStorage().value[user] = _isBlacklisted;
-    emit Blacklisted(user, _isBlacklisted);
+
+    if (isBlacklisted_ && isWhitelisted(user)) {
+      revert UserWhitelisted(user);
+    }
+
+    _getBlacklistStorage().value[user] = isBlacklisted_;
+    emit Blacklisted(user, isBlacklisted_);
+  }
+
+  /**
+   * @notice Whitelists or unwhitelists an address.
+   * @dev Can only be called by the owner.
+   * @param user The address to whitelist or unwhitelist.
+   * @param isWhitelisted_ Whether to whitelist or unwhitelist the address.
+   */
+  function setWhitelisted(address user, bool isWhitelisted_) external onlyOwner {
+    if (user == address(0)) {
+      revert ZeroAddressNotAllowed();
+    }
+
+    if (isWhitelisted_ && isBlacklisted(user)) {
+      revert UserBlacklisted(user);
+    }
+
+    _getWhitelistStorage().value[user] = isWhitelisted_;
+    emit Whitelisted(user, isWhitelisted_);
   }
 
   /**
@@ -459,10 +521,6 @@ contract SpdBTC is
    * @param receiver The address to receive the minted spdBTC
    */
   function _isValidDeposit(uint256 amount, address receiver) internal view {
-    if (_getBlacklistStorage().value[receiver]) {
-      revert ReceiverBlacklisted(receiver);
-    }
-
     uint256 maxAssets = StorageSlot.getUint256Slot(_MAX_DEPOSIT_SLOT).value;
     if (totalSupply() + amount > maxAssets) {
       revert ExceededMaxDeposit(receiver, amount, maxAssets);
