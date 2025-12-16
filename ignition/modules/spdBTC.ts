@@ -10,9 +10,7 @@ export default buildModule('spdBTC', (m) => {
   const maxDeposit = m.getParameter("max_deposit", String(Math.pow(2, 52)));
   const custodian = m.getParameter("custodian");
 
-  // XXX: The next line deploys a contract. I have no idea how to avoid that.
-  //      I need to use this contract's ABI in this script though.
-  const spdBTC = m.contract("SpdBTC");
+  const spdBTC = m.contractAt("SpdBTC", impl);
   const initializeProductData = m.encodeFunctionCall(spdBTC, "initializeProduct",
     [
       {
