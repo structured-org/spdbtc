@@ -1,16 +1,23 @@
-import { HardhatUserConfig } from 'hardhat/config';
-import '@nomicfoundation/hardhat-toolbox';
+import { defineConfig, configVariable } from 'hardhat/config';
+import hardhatToolboxMochaEthers from '@nomicfoundation/hardhat-toolbox-mocha-ethers';
+import hardhatEthers from '@nomicfoundation/hardhat-ethers';
+import hardhatTypechain from '@nomicfoundation/hardhat-typechain';
+import hardhatMocha from '@nomicfoundation/hardhat-mocha';
+import hardhatEthersChaiMatchers from '@nomicfoundation/hardhat-ethers-chai-matchers';
+import hardhatNetworkHelpers from '@nomicfoundation/hardhat-network-helpers';
+import hardhatVerify from '@nomicfoundation/hardhat-verify';
+import 'dotenv/config'
 
-require('dotenv').config({ path: __dirname + '/deployments/.env' });
-const {
-  SEPOLIA_API_URL,
-  SEPOLIA_PRIVATE_KEY,
-  ETHERSCAN_API_KEY,
-  ETHEREUM_API_URL,
-  ETHEREUM_PRIVATE_KEY,
-} = process.env;
-
-const config: HardhatUserConfig = {
+export default defineConfig({
+  plugins: [
+    hardhatEthers,
+    hardhatTypechain,
+    hardhatMocha,
+    hardhatEthersChaiMatchers,
+    hardhatNetworkHelpers,
+    hardhatToolboxMochaEthers,
+    hardhatVerify,
+  ],
   solidity: {
     version: '0.8.28',
     settings: {
@@ -20,23 +27,23 @@ const config: HardhatUserConfig = {
       },
     },
   },
-  defaultNetwork: 'sepolia',
   networks: {
     sepolia: {
-      url: SEPOLIA_API_URL,
-      accounts: [`0x${SEPOLIA_PRIVATE_KEY}`],
+      type: 'http',
+      chainType: 'l1',
+      url: configVariable('SEPOLIA_API_URL'),
+      accounts: [configVariable('SEPOLIA_PRIVATE_KEY')],
     },
     ethereum: {
-      url: ETHEREUM_API_URL,
-      accounts: [`0x${ETHEREUM_PRIVATE_KEY}`],
+      type: 'http',
+      chainType: 'l1',
+      url: configVariable('ETHEREUM_API_URL'),
+      accounts: [configVariable('ETHEREUM_PRIVATE_KEY')],
     },
   },
-  etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+  verify: {
+    etherscan: {
+      apiKey: configVariable('ETHERSCAN_API_KEY'),
+    },
   },
-  sourcify: {
-    enabled: false,
-  },
-};
-
-export default config;
+});
