@@ -1,6 +1,8 @@
-import { ethers } from 'hardhat';
 import { expect } from 'chai';
+import hre from 'hardhat';
 import { FunctionFragment } from 'ethers';
+
+const { ethers } = await hre.network.connect();
 
 describe('spdBTC', function () {
   const contracts: {
@@ -127,10 +129,7 @@ describe('spdBTC', function () {
 
     await expect(
       contracts.spdBtc.connect(user1).deposit(100, user2.address),
-    ).to.be.revertedWithCustomError(
-      contracts.spdBtc,
-      'UserIsNotWhitelisted',
-    );
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserIsNotWhitelisted');
   });
 
   it('Cannot transfer tokens to blacklisted address', async function () {
@@ -188,9 +187,9 @@ describe('spdBTC', function () {
     await contracts.spdBtc.connect(user1).approve(owner.address, 100);
     await contracts.spdBtc.setBlacklisted(user2.address, true);
 
-    expect(
+    await expect(
       contracts.spdBtc.transferFrom(user1.address, user2.address, 50),
-    ).to.be.revertedWith('Receiver is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Cannot transferFrom tokens from blacklisted address', async function () {
@@ -208,9 +207,9 @@ describe('spdBTC', function () {
     await contracts.spdBtc.connect(user1).approve(owner.address, 100);
     await contracts.spdBtc.setBlacklisted(user1.address, true);
 
-    expect(
+    await expect(
       contracts.spdBtc.transferFrom(user1.address, user2.address, 50),
-    ).to.be.revertedWith('Sender is blacklisted');
+    ).to.be.revertedWithCustomError(contracts.spdBtc, 'UserBlacklisted');
   });
 
   it('Blacklisted account cannot call transferFrom', async function () {
